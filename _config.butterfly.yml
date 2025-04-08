@@ -196,7 +196,7 @@ toc:
   number: true
   expand: false
   # Only for post
-  style_simple: false
+  style_simple: true
   scroll_percent: true
 
 post_copyright:
@@ -269,7 +269,7 @@ footer:
 
 aside:
   enable: true
-  hide: false
+  hide: true
   # Show the button to hide the aside in bottom right button
   button: true
   mobile: true
