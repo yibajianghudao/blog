@@ -16,8 +16,12 @@ spring:
 mvnw clean install -DskipTests
 ```
 `-DskipTests`是跳过对单元测试的运行(但是会编译)
-### Docker
-#### 项目
+## Docker
+首先创建网络:
+```shell
+docker network create greatmingweb
+```
+### 项目
 Dockerfile:
 ```
 FROM openjdk:17-oracle
@@ -30,7 +34,7 @@ ENTRYPOINT [ "java","-jar","app.jar" ]
 ```
 docker run -d --name greatming -p 8080:8080 --network greatmingweb greatming:1.1.0
 ```
-#### mariadb
+### mariadb
 拉取镜像  
 ```
 docker pull mariadb:11.7.2
