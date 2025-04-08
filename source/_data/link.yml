@@ -1,0 +1,7 @@
+- class_name: 友情链接
+  class_desc:
+  link_list:
+    - name: aineer
+      link: https://aineer.github.io
+      avatar: https://aineer.github.io/static/img/logo.png
+      descr: 男 熱愛計算機和人文社科
