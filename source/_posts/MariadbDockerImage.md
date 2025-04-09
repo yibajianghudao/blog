@@ -16,7 +16,7 @@ docker exec -it mariadb bash
         CREATE DATABASE GreatMing;
         CREATE USER 'greatming'@'%'IDENTIFIED BY 'greatming';
         GRANT ALL ON GreatMing.* TO 'greatming'@'%' IDENTIFIED BY 'greatming';
-    mariadb -ugreatming -p GreatMing < /tmp/data.sql
+    mariadb -ugreatming -p GreatMing < /var/tmp/data.sql
 ```
 ## User Mariadb by docker compose
 现在我要把它使用dockercompose来构建:
