@@ -73,8 +73,42 @@ services:
 ```
 执行数据导入(`backup.sql`)时会默认导入到该数据库中,如果不指定该环境变量,可以在`backup.sql`的文件顶部添加`USE GreatMing`,如果不使用`init.sql`还需要在更上方添加`CREATE DATABASE IF NOT EXISTS GreatMing;`.
 ## tips
-from[mariadb image](https://hub.docker.com/_/mariadb):  
-Initializing the database contents
 
-When a container is started for the first time, a new database with the specified name will be created and initialized with the provided configuration variables. Furthermore, it will execute files with extensions **.sh, .sql, .sql.gz, .sql.xz and .sql.zst that are found in /docker-entrypoint-initdb.d.** **Files will be executed in alphabetical order.** .sh files without file execute permission are sourced rather than executed. You can easily populate your mariadb services by mounting a SQL dump into that directory⁠
-and provide custom images⁠ with contributed data. **SQL files will be imported by default to the database specified by the MARIADB_DATABASE variable.**
+### mariadb image官方文档
+
+from[mariadb image](https://hub.docker.com/_/mariadb):  
+
+*Initializing the database contents*
+
+*When a container is started for the first time, a new database with the specified name will be created and initialized with the provided configuration variables. Furthermore, it will execute files with extensions **.sh, .sql, .sql.gz, .sql.xz and .sql.zst that are found in /docker-entrypoint-initdb.d.** **Files will be executed in alphabetical order.** .sh files without file execute permission are sourced rather than executed. You can easily populate your mariadb services by mounting a SQL dump into that directory⁠
+and provide custom images⁠ with contributed data. **SQL files will be imported by default to the database specified by the MARIADB_DATABASE variable.***
+
+### 使用环境变量
+
+可以在docker-compose.yml文件的同目录下新建`.env`文件,如:
+```
+WEB_VERSION=1.1.0
+MYSQL_ROOT_PASSWORD=rootpasswd
+MYSQL_DATABASE=GreatMing
+```
+
+对应的`docker-compose.yml`文件修改:
+
+```yaml
+services:
+  web:
+    build: .
+    image: greatmingweb:${WEB_VERSION}
+    ports:
+      - "8080:8080"
+  mariadb:
+    image: "mariadb:11.7.2"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+    volumes:
+      - ./init:/docker-entrypoint-initdb.d
+    ports:
+      - "3306:3306"
+```
+
