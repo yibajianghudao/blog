@@ -2,6 +2,10 @@
 title: SpringBootLog
 date: 2025-04-08 15:50:01
 tags:
+    - springboot
+    - log
+categories:
+    - tutorial
 ---
 ## SpringBootLog
 在`application.yaml`文件中配置:

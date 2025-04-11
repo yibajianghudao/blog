@@ -2,6 +2,9 @@
 title: docker部署项目
 date: 2025-04-02 23:45:10
 tags:
+   - docker
+categories:
+   - tutorial
 ---
 # 使用Docker部署SpringBoot+Mariadb项目
 ## 项目配置

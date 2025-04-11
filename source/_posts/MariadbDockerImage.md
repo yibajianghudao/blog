@@ -2,6 +2,10 @@
 title: MariadbDockerImage
 date: 2025-04-10 01:43:00
 tags:
+   - docker
+   - mariadb
+categories:
+   - tutorial
 ---
 # Use Mariadb's docker image
 ## Use Mariadb by docker
