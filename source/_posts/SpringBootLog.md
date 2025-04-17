@@ -6,6 +6,7 @@ tags:
     - log
 categories:
     - note
+description: SpringBootLog的使用
 ---
 ## SpringBootLog
 在`application.yaml`文件中配置:

@@ -5,6 +5,7 @@ tags:
    - docker
 categories:
    - note
+description: Docker部署SpringBoot + Mariadb + Redis项目笔记.
 ---
 # 使用Docker部署SpringBoot+Mariadb项目
 ## 项目配置

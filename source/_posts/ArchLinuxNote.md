@@ -6,6 +6,7 @@ tags:
     - note
 categories:
    - note
+description: 我的ArchLinux使用笔记
 ---
 # ArchLinux使用笔记
 ## ZSH

@@ -6,6 +6,7 @@ tags:
    - mariadb
 categories:
    - note
+description: Mariadb的Docker镜像使用笔记
 ---
 # Use Mariadb's docker image
 ## Use Mariadb by docker

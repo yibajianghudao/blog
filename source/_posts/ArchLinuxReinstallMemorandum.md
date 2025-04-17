@@ -5,6 +5,7 @@ tags:
     - archlinux
 categories:
     - memorandum
+description: ArchLinux重装备忘录
 ---
 # ArchLinux重裝備忘錄
 最近又重裝了一下ArchLinux，寫一下遇到的問題.

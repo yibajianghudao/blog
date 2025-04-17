@@ -5,6 +5,7 @@ tags:
     - nextcloud
 categories:
     - note
+description: NextCloudServer部署笔记(ArchLinux)
 ---
 # NextCloud部署笔记
 主要参考[archlinux wiki](https://wiki.archlinuxcn.org/wiki/Nextcloud)  
