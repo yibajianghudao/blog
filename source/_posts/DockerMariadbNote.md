@@ -5,7 +5,7 @@ tags:
    - docker
    - mariadb
 categories:
-   - tutorial
+   - note
 ---
 # Use Mariadb's docker image
 ## Use Mariadb by docker

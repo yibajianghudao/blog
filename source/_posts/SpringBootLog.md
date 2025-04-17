@@ -5,7 +5,7 @@ tags:
     - springboot
     - log
 categories:
-    - tutorial
+    - note
 ---
 ## SpringBootLog
 在`application.yaml`文件中配置:

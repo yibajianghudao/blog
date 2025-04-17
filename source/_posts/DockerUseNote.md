@@ -1,10 +1,10 @@
 ---
-title: docker使用
+title: Docker的使用
 date: 2025-04-08 11:49:19
 tags:
    - docker
 categories:
-   - tutorial
+   - note
 ---
 
 ### docker 删除所有未运行的容器:

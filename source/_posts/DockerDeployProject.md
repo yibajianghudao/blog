@@ -1,10 +1,10 @@
 ---
-title: docker部署项目
+title: Docker部署项目
 date: 2025-04-02 23:45:10
 tags:
    - docker
 categories:
-   - tutorial
+   - note
 ---
 # 使用Docker部署SpringBoot+Mariadb项目
 ## 项目配置
@@ -185,7 +185,7 @@ MYSQL_DATABASE=GreatMing
 `docker-compose config`可以查看插入`env`环境变量后的配置.
 
 ## 部署到服务器
-
+这里我部署到了ubuntu服务器上.  
 部署到服务器首先要在服务器安装docker和docker compose
 
 ### 上传镜像到本地
@@ -210,7 +210,10 @@ docker save -o greatmingweb.tar greatmingweb:1.1.0
 上传到服务器后读取镜像:
 
 ```
-docker load 
+docker load -i mariadb.tar
+docker load -i redis.tar
+docker load -i greatmingweb.tar
+docker-compose up
 ```
 
 ### 上传运行必要文件
@@ -247,6 +250,28 @@ services:
 ```
 
 ### 运行
-
 `docker-compose up`
 
+## 备注
+本来打算部署到一台windows server2022服务器上的,结果docker虚拟化一直出问题,下面是我的部分操作步骤,给大家当参考吧,反正最后是失败了:  
+我准备打算部署到windows-server22上,但是安装docker-desktop之后一直无法启动,发现是Hyper-V没有安装,在控制面板-程序-管理windows功能里面安装时,提示无法安装:处理器没有所需的虚拟化功能,这可把我吓了一跳,我还以为阿里云提供的ecs的cpu不能打开虚拟化,但是看了一些教程发现能在这个系统上面用docker,但是一直没人说到底怎么才能打开,最后在微软官网发现了:  
+[Install Hyper-V](https://learn.microsoft.com/en-us/windows-server/virtualization/hyper-v/get-started/install-hyper-v)
+在windows中用管理员打开powershell,输入:
+```
+DISM /Online /Enable-Feature /All /FeatureName:Microsoft-Hyper-V
+```
+运行后重启即可,然后打开docker,发现还是报错:"The Windows Containers feature is disabeled"  
+还需要运行:
+```
+Enable-WindowsOptionalFeature -Online -FeatureName $("Microsoft-Hyper-V", "Containers") -All
+```
+现在docker desktop可以运行了,但是我现在运行的是windows containers,读取我制作好的镜像时报错:
+`cannot load linux image on windows`.  
+原来是我在安装docker-desktop的时候勾选了使用windows镜像.  
+在右下角托盘右键点击`Switch to Linux containers`后restart docker.    
+这是又提示WSL update failed 需要手动运行`wsl --update`  
+由于网络问题,更新的非常慢,发现可以在[WSL官方仓库]](https://github.com/microsoft/WSL/releases)手动下载安装包.  
+安装wsl2后,打开docker发现还是提示wsl update失败.  
+重新安装docker desktop,不勾选 `use Windows Containers`  
+发现wsl提示设备不支持虚拟化,又尝试了安装时不选择使用wsl2替代Hyper-V等等,均无法使用,最后放弃使用windowsserver,换成ubuntu了.  
+提示: WSL2的github仓库似乎有这个问题,说是使用一个脚本打开虚拟化设备的子虚拟化功能,但是给的脚本还没运行就一堆"command not found",于是我没有尝试继续运行.
