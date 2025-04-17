@@ -162,9 +162,13 @@ subtitle:
   # 1 - hitokoto.cn
   # 2 - https://api.aa1.cn/doc/yiyan.html
   # 3 - jinrishici.com
-  source: 3
+  source: false
   # If you close the typewriter effect, the subtitle will only show the first line of sub
   sub:
+    - 林花谢了春红，太匆匆。无奈朝来寒雨晚来风。
+    - 胭脂泪，相留醉，几时重。自是人生长恨水长东。
+    - 此去经年，应是良辰好景虚设。便纵有千种风情，更与何人说？
+    - 众里寻他千百度。蓦然回首，那人却在，灯火阑珊处。
 
 # Article layout on the homepage
 # 1: Cover on the left, info on the right
