@@ -113,5 +113,47 @@ _remove_vmware_keymaps_dependency=y
     运行 pacman -U package_file 将软件包安装到您的系统上。
 ```
 `vmware-workstation`目录本质上是一个git仓库，所以修改需要`git add`,`git commit`.
+
 ### 使用`paru --fm`参数
 使用命令`paru --fm vim -S vmware-workstation`可以在安装之前使用指定的编辑器(vim)编辑文件，包括`PKGBUILD`文件.
+
+## 恢复快照
+
+### 跨内核版本恢复('failed to mount /boot')
+
+使用cd环境挂载磁盘,进入系统,然后运行
+
+```shell
+grub-mkconfig -o /boot/grub/grub.cfg
+mkinitcpio -p linux		#或者直接mkinitcpio -P
+```
+
+如果还是报错的话可以试试重新安装一下`linux`软件包
+
+### 由于找不到subid引起的报错
+
+在`/etc/fstab`中删去btrfs磁盘的`subid`参数,仅保留`subvol`即可.新版本的btrfs似乎默认创建的时候已经不包含`subid`了
+
+## 关机/重启
+
+#### 关机时文件占用等待时间较长
+
+`#DefaultTimeoutStopSec=90s`
+取消前面的注释，然后将90s修改为想等待的数值，比如20s，保存并退出。  
+更新systemd配置以应用更改：
+`sudo systemctl daemon-reload`
+
+## 关于x11切换到wayland遇到的问题
+
+我的显示器在x11中运行正常，然后我尝试切换到wayland，我安装了三个包：
+`wayland`,`xorg-xwayland`,`glfw-wayland`(GUI app dev packages for Wayland)，值得一提的是，我使用的是NVIDIA显卡(RTX3060)，并且使用的是闭源驱动(nvidia)
+但是当我安装完包之后，并没有切换到wayland(输入`echo $XDG_SESSION_TYPE`显示x11)，然后根据[Archwiki GDM](https://wiki.archlinux.org/title/GDM#Wayland_and_the_proprietary_NVIDIA_driver)中的`ln -s /dev/null /etc/udev/rules.d/61-gdm.rules`命令，重启后`echo $XDG_SESSION_TYPE`显示wayland(当然不是我想出来的，感谢老孔)
+当我切换到wayland之后，我的显示器黑屏了，没有提示出当我没有接hdmi线时的“无信号输入”，并且右下角指示灯闪烁(正常情况下应该是常亮)
+在求助ArchLinuxCN群的群友之后，解决方案是打开DRM KMS
+步骤如下：
+
+1. 打开`sudo vim /etc/default/grub`
+1. 在`GRUB_CMDLINE_LINUX_DEFAULT=`后面加上`nvidia_drm.modeset=1`
+1. 终端运行：`sudo grub-mkconfig -o /boot/grub/grub.cfg`
+   重启后问题解决。
+
