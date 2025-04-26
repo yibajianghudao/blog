@@ -3,17 +3,25 @@ title: StudyLinuxNote
 tags:
 ---
 # StudyLinuxNote
-## Shell
-### ``
+
+
+## 基础
+
+### Shell
+
+#### ``
+
 特殊符號``中的命令會被優先執行,比如:
+
 ```
 ls -l `which sudo`
 ```
-先找到sudo命令的位置,然後對該位置運行ls
-### |
-`|` 管道符号：前1个命令输出给后面命令使用，一般過濾
 
-## 基础
+先找到sudo命令的位置,然後對該位置運行ls
+
+#### |
+
+`|` 管道符号：前1个命令输出给后面命令使用，一般過濾
 
 ### 连接
 
@@ -55,6 +63,101 @@ alias ll=`ls -l`
 可以在`~/.bashrc`,`/etc/profile`等设置环境变量的文件中写入alias命令来达到配置永久生效
 
 可以使用`unalias`命令来取消别名
+
+### 进程
+
+进程是程序执行时的运行实例,它可以是前台进程(交互式进程)也可以是非交互式进程(非交互式进程),进程可以由主进程(parent process)或其它子进程创建.
+
+在linux系统中,除了第一个PID为1的init(或system)进程外,每个进程都有一个父进程,进程也有自己的子进程.可以使用`pstree`命令查看进程树:
+
+```bash
+$ pstree
+systemd─┬─NetworkManager───3*[{NetworkManager}]
+        ├─bluetoothd
+        ├─dbus-broker-lau───dbus-broker
+        ├─mariadbd───8*[{mariadbd}]
+        ├─nginx───24*[nginx]
+
+```
+
+#### 进程状态
+
+linux中的进程有一个进程状态:
+
+| STAT基本状态 | 描述                           |
+| ------------ | ------------------------------ |
+| R(running)   | 运行中进程                     |
+| S            | 可中断进程                     |
+| T(terminate) | 进程被暂停(挂起)(ctrl+z)       |
+| D            | 不可中断的进程(进程正在IO读写) |
+| Z(zombie)    | 僵尸进程,异常的进程            |
+
+| STAT状态 + 符号(附加状态) | 描述                                                         |
+| ------------------------- | ------------------------------------------------------------ |
+| s                         | 进程是控制进程,Ss进程的领导者,父进程/主进程                  |
+| <                         | 进程运行在高优先级上,S<优先级较高的进程                      |
+| N                         | 进程运行在低优先级上,SN优先级较高的进程                      |
+| +                         | 当前进程运行在前台,R+表示该进程在前台运行                    |
+| l                         | 进程是多线程的,sl表示进程是以线程方式运行<br />使用多线程可以让服务或软件支持更改的访问 |
+
+#### `ps`
+
+`ps`命令用于静态查看当前系统的进程状态,常见的命令有:
+`ps -ef`以BSD格式显示所有正在运行的进程的UID,PID,PPID(父进程的id),CMD(进程名字)
+
+`ps aux`以标准格式显示所有正在运行的进程,除了-ef的结果,还有cpu使用率,内存使用率,占用内存大小,进程状态
+
+![ps](assets/ps.png)
+
+`ps`命令经常与其他命令配合使用,例如和`kill`命令搭配随时中断,删除不必要的程序
+
+```bash
+# 取出所有进程中内存使用率最高的前5个
+ps aux | sort -rnk4 | head -5
+```
+
+#### top
+
+`top`命令可以动态的查看系统的整体运行情况,包括进程状态(僵尸进程等)
+
+![top](assets/top.png)
+
+常用快捷键:
+
+- q 退出
+- 空格 立即刷新(默认3秒刷新)
+- P 按照cpu使用率排序
+- M 按照内存使用率排序
+
+进阶使用:
+
+- 按z进入颜色模式,按x标记当前按照哪一列排序
+- shift + > 向右
+- shift + < 向左
+
+`top -b`进入非交互式模式,`top -n1`表示只输入一次结果:
+
+```bash
+top -bn1 | awk 'NR=2'
+```
+
+
+
+`htop`是top的增强版,支持使用鼠标进行操作.
+
+#### 僵尸进程
+
+当一个进程停止时,其父进程会被告知,以便进行一些清理工作(比如释放内存空间,资源占用).然而,如果父进程没有意识到子进程的死亡(挂掉了),子进程就会进入僵尸状态．对于父进程来说，子进程仍然存在，但实际上子进程已经死亡并持续存在于系统中．
+
+![zombies-turnoff-800x467](assets/zombies-turnoff-800x467.webp)
+
+可以使用`ps aux | grep Z`找出僵尸进程的pid,然后通过`pstree -p | grep pid`查看僵尸进程的父进程,通过`kill pid`指令无法直接结束僵尸进程,需要结束僵尸进程的父进程才能结束僵尸进程.
+
+#### 孤儿进程
+
+孤儿进程指其父进程执行完成或被终止后仍继续运行的一类进程,孤儿进程会被系统直接接管(system进程)
+
+
 
 ## Command
 
@@ -263,22 +366,48 @@ find /etc/ -type f -name "*.conf" -size +10k -mtime +7
    find /etc/ -type f -name '*.txt' -exec ls -lh {} \;
    ```
 
-   #### grep
 
-   `grep 'root' /etc/passwd`
+#### grep
 
-   - `-n`显示行号
-   - `-v`取反,常用于取排除项`grep -v 'root' /etc/passwd`
-   - `-i`过滤忽略大小写
+`grep 'root' /etc/passwd`
 
-   grep命令常用在管道中:
+- `-n`显示行号
+- `-v`取反,常用于取排除项`grep -v 'root' /etc/passwd`
+- `-i`过滤忽略大小写
 
-   ```bash
-   # 过滤名字为crond的进程
-   ps -ef | grep 'crond'
-   ```
+grep命令常用在管道中:
 
-   
+```bash
+# 过滤名字为crond的进程
+ps -ef | grep 'crond'
+```
+
+#### sed
+
+`sed`命令使用脚本来处理文本文件或输出:
+
+在文件第4行添加行:`sed -e 4a\newLine testfile`
+
+将文件的内容列出并列印行号,同时删除2-5行:`nl testfile | sed '2,5d'`
+
+#### awk
+
+awk`提供编程语言的功能来处理文本文件,是一个强大的文本分析工具.
+
+```bash
+# 只显示第一列进程信息
+ps aux | awk '{print $1}'
+USER
+root
+root
+root
+root
+root
+root
+root
+root
+root
+```
 
 ## 用户/用户组管理
 
@@ -490,3 +619,60 @@ drwxrwxrwt  17 root root  440 Apr 23 02:09 tmp
 - `chattr +i test.txt`,i属性 immutable,不朽的,防止误删
 
 使用`lsattr`命令可以查看这种特殊属性
+
+## 发行版
+
+### 软件包管理
+
+软件包一般有以下四种安装方式:
+
+1. 使用包管理器安装,例如`yum`,`apt`,`pacman`等工具.
+2. 手动从文件安装软件包,例如`rpm`,`dpkg`等软件包.
+3. 安装别人编译好的二进制文件.
+4. 从yuan dai ma手动编译安装
+
+#### 软件包安装方式
+
+##### yum
+
+修改yum为国内源:
+
+```
+# 备份已有yum源的配置文件
+mv /etc/yum.repos.d/CentOS-Base.repo /etc/yum.repos.d/CentOS-Base.repo.backup
+# 配置系统默认的源，改为阿里云的。
+# 使用wget或curl 下载阿里云的yum源的配置文件到/etc/yum.repos.d/目录下
+wget -O /etc/yum.repos.d/CentOS-Base.repo https://mirrors.aliyun.com/repo/Centos-repo
+```
+
+| yum命令 | 格式与说明                                                   |
+| ------- | ------------------------------------------------------------ |
+| 安装    | yum install -y tree<br />yum localinstall # 本地安装rpm包,同时处理yi lai |
+| 查询    | yum provides<br />yum search all<br />yum repolist # 查看源列表 |
+| 删除    | yum remove # 删除软件包及依赖<br />yum clean all # 清除缓存  |
+| 更新    | yum update/upgrade                                           |
+| 选项    | yum -y (遇到yes/no选项是选择yes)                             |
+
+##### apt
+
+| apt命令 | 格式与说明                                                   |
+| :------ | ------------------------------------------------------------ |
+| 安装    | apt install -y tree                                          |
+| 查询    | apt search <关键词><br />apt show <包名> # 显示详细信息<br />apt list --installed \| grep <包名> # 检查是否安装<br />apt policy <包名> # 查看软件源优先级 |
+| 删除    | apt remove <包名> # 删除软件包<br />apt autoremove # 删除未使用的依赖<br />apt clean # 清理下载的包缓存<br />apt autoclean # 清理旧版本包缓存 |
+| 更新    | apt update # 更新包列表 <br />apt upgrade # 升级已安装包<br />apt full-upgrade # 升级并处理依赖关系 |
+| 选项    | apt -y (自动确认操作)<br />apt --allow-unauthenticated (允许未认证包) |
+
+#### rpm安装方式
+
+| rpm命令 | 选项                                                         |
+| ------- | ------------------------------------------------------------ |
+| 安装    | rpm -ivh package.rpm                                         |
+| 检查    | rpm -qa(query all) package<br />rpm -ql # 查看软件包内容<br />rpm -qf 文件或命令的绝对路径 # 查看文件或命令所归属的软件包 |
+| 升级    | rpm -Uvh 升级软件包                                          |
+| 删除    | rpm -e package                                               |
+
+
+
+
+
