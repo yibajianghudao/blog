@@ -64,6 +64,8 @@ alias ll=`ls -l`
 
 可以使用`unalias`命令来取消别名
 
+## 系统管理
+
 ### 进程
 
 进程是程序执行时的运行实例,它可以是前台进程(交互式进程)也可以是非交互式进程(非交互式进程),进程可以由主进程(parent process)或其它子进程创建.
@@ -84,17 +86,17 @@ systemd─┬─NetworkManager───3*[{NetworkManager}]
 
 linux中的进程有一个进程状态:
 
-| STAT基本状态 | 描述                           |
-| ------------ | ------------------------------ |
-| R(running)   | 运行中进程                     |
-| S            | 可中断进程                     |
-| T(terminate) | 进程被暂停(挂起)(ctrl+z)       |
-| D            | 不可中断的进程(进程正在IO读写) |
-| Z(zombie)    | 僵尸进程,异常的进程            |
+| STAT基本状态 | 描述                               |
+| ------------ | ---------------------------------- |
+| R(running)   | 运行中进程                         |
+| S(sleeping)  | 可中断进程                         |
+| T(terminate) | 进程被暂停(挂起)(ctrl+z)           |
+| D            | 不可中断的进程(进程正在进行IO读写) |
+| Z(zombie)    | 僵尸进程,异常的进程                |
 
 | STAT状态 + 符号(附加状态) | 描述                                                         |
 | ------------------------- | ------------------------------------------------------------ |
-| s                         | 进程是控制进程,Ss进程的领导者,父进程/主进程                  |
+| s                         | 进程是控制进程,即父进程/主进程                               |
 | <                         | 进程运行在高优先级上,S<优先级较高的进程                      |
 | N                         | 进程运行在低优先级上,SN优先级较高的进程                      |
 | +                         | 当前进程运行在前台,R+表示该进程在前台运行                    |
@@ -156,6 +158,136 @@ top -bn1 | awk 'NR=2'
 #### 孤儿进程
 
 孤儿进程指其父进程执行完成或被终止后仍继续运行的一类进程,孤儿进程会被系统直接接管(system进程)
+
+#### 结束进程
+
+1. `kill`,`kill + 进程pid`结束进程
+2. `pkill`,`pkill + 进程名字`模糊查找,结束进程
+3. `killall`,`killall + 进程名字`精确结束进程
+
+### 后台管理
+
+linux运行程序分为后台和前台程序,要区分前台和后台程序,可以查看进程状态,带`+`表示前台运行的程序.
+
+- 前台运行:需要连接后才能运行和操作,连接断开后操作会自动结束
+- 后台运行:让软件进入系统的后台持续运行,一般情况下连接断开也不会影响软件的运行.
+
+可以使用`job`命令查看
+
+软件后台运行的方法:
+
+1. 使用在命令后添加`&`:
+   ```bash
+   ╰─$ sleep 999 &     
+   [1] 61448
+   # 返回的是进程的pid
+   
+   # 可以使用jobs命令查看当前终端正在后台运行的进程:
+   ╰─$ jobs
+   [1]    running    sleep 999
+   [2]    running    sleep 999
+   [3]  - running    sleep 999
+   [4]  + running    sleep 999
+   
+   ```
+
+2. `nohup`命令配合`&`方法,可以保留输出到指定文件中,默认是nohup.out文件中,其他和`&`一致
+   `nohup`命令可以将程序以忽略挂起信号的方式运行起来，被运行的程序的输出信息将不会显示到终端,默认追加到当前目录下的`nohup.out`文件,若不可写,则追加到`$HOME/nohup.out`文件.nohup命令本身并无后台含义，直接执行仍会占用终端，故常与`&`连用.
+
+   ```bash
+   ╰─$ nohup ping -c10 127.0.0.1 &
+   [5] 62063
+   nohup: ignoring input and appending output to 'nohup.out'                                                     
+   ╰─$ 
+   [5]  + 62063 done       nohup ping -c10 127.0.0.1
+   
+   ╰─$ cat nohup.out
+   PING 127.0.0.1 (127.0.0.1) 56(84) bytes of data.
+   64 bytes from 127.0.0.1: icmp_seq=1 ttl=64 time=0.042 ms
+   64 bytes from 127.0.0.1: icmp_seq=2 ttl=64 time=0.037 ms
+   64 bytes from 127.0.0.1: icmp_seq=3 ttl=64 time=0.033 ms
+   64 bytes from 127.0.0.1: icmp_seq=4 ttl=64 time=0.027 ms
+   64 bytes from 127.0.0.1: icmp_seq=5 ttl=64 time=0.043 ms
+   64 bytes from 127.0.0.1: icmp_seq=6 ttl=64 time=0.050 ms
+   64 bytes from 127.0.0.1: icmp_seq=7 ttl=64 time=0.049 ms
+   64 bytes from 127.0.0.1: icmp_seq=8 ttl=64 time=0.035 ms
+   64 bytes from 127.0.0.1: icmp_seq=9 ttl=64 time=0.048 ms
+   64 bytes from 127.0.0.1: icmp_seq=10 ttl=64 time=0.035 ms
+   
+   --- 127.0.0.1 ping statistics ---
+   10 packets transmitted, 10 received, 0% packet loss, time 9208ms
+   rtt min/avg/max/mdev = 0.027/0.039/0.050/0.007 ms
+   
+   ```
+
+3. 使用`ctrl + z`让当前运行的命令或服务进入**后台挂起**,若要进入**后台运行**,需要再运行`bg`命令,可以通过`fg`取消挂起
+
+4. `screen`使用`nohup`+`&`命令不会停止,但不稳定,使用`screen`命令可以较为稳定的在后台运行命令.
+   screen简易原理:
+
+   > Screen is a terminal multiplexer, or more accurately a terminal-window manager.
+
+   Screen本质上是一个终端管理器,断开了终端与当前tty的连接,终端均由screen派生且相互独立.
+   常用指令:
+
+   ```bash
+   # 进入screen
+   screen
+   # 退出screen
+   ctrl + a + d
+   # 停止并退出
+   ctrl + c; ctrl + d
+   ```
+
+不同运行方法的对比:
+
+`&`方法和`ctrl + z`运行在终端中,终端关闭后(ssh断开)运行的命令也会停止
+
+```bash
+# sleep 999 &
+systemd─┬─NetworkManager───3*[{NetworkManager}]
+        ├─systemd─┬─(sd-pam)
+        │         ├─konsole─┬─zsh───sleep
+```
+
+`nohup`运行在终端之外,终端关闭后命令能继续运行
+
+```bash
+# nohup sleep 999 &
+systemd─┬─systemd─┬─konsole─┬─zsh───pstree
+        │         ├─sleep
+```
+
+`screen`运行在终端之外,终端关闭后命令能继续运行
+
+```bash
+# screen
+# ping bilibili.com
+systemd─┬─systemd──konsole───zsh───sleep
+        │         ├─screen───zsh───ping
+```
+
+### 负载
+
+负载(load average)是用来衡量系统繁忙程度的指标.是指单位时间内,系统处于可运行状态(R,S)和不可终端状态(D)的平均进程数,也就是平均活跃进程数,可以通过`top`命令查看.
+
+负载的数值越接近cpu核心总数,系统的负载越高,建议负载达到cpu总数的70%-80%时预警.
+
+![image-20250428005654008](assets/image-20250428005654008.png)
+
+#### 负载高的排查流程
+
+1. 通过监控软件发现系统负载高(w, lscpu查看)
+2. 判断是cpu还是io导致的负载高
+   - cpu高:top中的`us`(用户占用cpu)`sy`(system系统占用cpu)
+   - io高:top中的wa磁盘io导致的负载高
+3. 如果是cpu导致的,排查出哪个进程导致的,`ps aux`过滤出占用cpu较高的进程
+   如果是io导致的,排查出哪个进程导致的,通过`iotop -o`命令排查
+4. 具体分析进程问题
+
+![image-20250428010231121](assets/image-20250428010231121.png)
+
+### 服务管理
 
 
 
