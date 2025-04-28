@@ -64,6 +64,32 @@ alias ll=`ls -l`
 
 可以使用`unalias`命令来取消别名
 
+### linux运行级别
+
+**运行级别**（**Runlevel**）指的是类Unix操作系统下不同的运行模式。运行级别通常分为7等，分别是从0到6.在全新的Linux,`systemd`中已经使用target代替Runlevel.
+
+| SysV Runlevel(Centos6) | Systemd Target(Centos7) | 注释                                                    |
+| ---------------------- | ----------------------- | ------------------------------------------------------- |
+| 0                      | poweroff.target         | 关机                                                    |
+| 1                      | rescue.target           | 单用户模式(不允许非超级用户登录)                        |
+| 2                      | multi-user.target       | 多用户模式,用户自定义级别                               |
+| 3                      | multi-user.target       | 多用户，无图形界面。用户可以通过终端或网络登录。        |
+| 4                      | multi-user.target       | 多用户模式,用户自定义级别                               |
+| 5                      | graphical.target        | 多用户，图形界面。继承级别3的服务，并启动图形界面服务。 |
+| 6                      | reboot.target           | 重启                                                    |
+
+查看当前系统运行级别:
+
+```bash
+systemctl get-default
+```
+
+修改运行级别:
+
+```bash
+systemctl set-default graphical.target
+```
+
 ## 系统管理
 
 ### 进程
@@ -289,7 +315,39 @@ systemd─┬─systemd──konsole───zsh───sleep
 
 ### 服务管理
 
+**systemd**是一个linux系统基础组件的集合,提供了一个系统和服务管理器,运行为PID1并负责启动其他程序.
 
+在历史上,systemd中的**服务(service)**被成为守护进程(daemon),它们在后台运行(即没有UI,不与终端交互),等待特定时间的发生并提供服务,例如Web服务器会等待一个请求以提供相应的页面,ssh服务器会等待登录请求.除了这种提供完整功能的,还有一些守护进程的工作是隐藏在幕后的,如负责向日志文件写入消息的`sysloc`,`metlog`,确保系统时间准确的`ntp`.
+
+监视和控制systemd的主要命令是`systemctl`,其用途包括查看系统状态以及管理系统和服务.
+
+#### 单元
+
+单元(uint)通常包括但不限于:服务(service),挂载点(.mount),设备(.device)和套接字(socket).
+
+使用`systemctl`时通常需要使用单元文件的全名,包括拓展名(比如`sshd.socket`),可以使用以下简写:
+
+- 若无拓展名,`systemctl`会假定拓展名为`.service`.
+- 挂载点会自动转换为相应的`.mount`单元,例如`/home`等价与`home.mount`.
+- 与挂载点类似,设备会自动转化为相应的`.device`单元,因此`/dev/sda2`等价于`dev-sda2.device`
+
+#### 命令
+
+| systemctl status unit        | 检查单元状态                                           |
+| ---------------------------- | ------------------------------------------------------ |
+| systemctl start unit         | 启动单元                                               |
+| systemctl stop unit          | 停止单元                                               |
+| systemctl restart unit       | 重启单元                                               |
+| systemctl reload unit        | 重新加载单元及其配置                                   |
+| systemctl daemon-reload unit | 重新加载systemd配置                                    |
+| systemctl enable unit        | 启用(开机自启动)单元,可以使用`--now`参数启用并立即启动 |
+| systemctl disable unit       | 取消开机自启动单元                                     |
+| systemctl list-units         | 单元运行情况                                           |
+| systemctl list-unit-files    | 单元开机自启动情况                                     |
+
+`systemctl`默认携带`--system`参数,以上命令默认对系统单元进行操作(需要root权限),若要对调用用户的用户单元进行操作,需要在非root身份下执行`systemctl --user`.
+
+服务如果无法使用systemctl管理实现,可以使用`/etc/rm.local`文件(是一个符号连接,指向`/etc/rc.d/rc.local`),将服务启动命令写入到`/etc/rc.local`中即可(第一次使用需要`chmod +x /etc/rc.d/rc.local`)
 
 ## Command
 
