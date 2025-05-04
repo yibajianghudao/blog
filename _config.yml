@@ -40,11 +40,11 @@ external_link:
   exclude: ''
 filename_case: 0
 render_drafts: false
-post_asset_folder: true
+post_asset_folder: false
 relative_link: false
 marked:
-  prependRoot: true
-  postAsset: true
+  prependRoot: false
+  postAsset: false
 future: true
 syntax_highlighter: highlight.js
 highlight:
