@@ -5,3 +5,5 @@ tags:
 ---
 # TESTIMAGE POST
 ![](ps.png)
+
+![](TestImage/ps.png)
