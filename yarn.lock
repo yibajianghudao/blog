@@ -675,6 +675,11 @@ hexo-pagination@3.0.0:
   resolved "https://registry.npmmirror.com/hexo-pagination/-/hexo-pagination-3.0.0.tgz"
   integrity sha512-8oo1iozloZo7TojPVYg4IxL3SJKCBdSJ908fTlIxIK7TWJIKdYnQlW31+12DBJ0NhVZA/lZisPObGF08wT8fKw==
 
+hexo-relative-link@^3.2.2:
+  version "3.2.2"
+  resolved "https://registry.npmjs.org/hexo-relative-link/-/hexo-relative-link-3.2.2.tgz"
+  integrity sha512-AJYA4IDHLuiNA8EoQJKL9lxIwOx1Okhmp6yzH1ObmD+j9q9u304jRV5/JSWM4fssksotNG8BvcvHGj5rnDJzvw==
+
 hexo-renderer-ejs@^2.0.0:
   version "2.0.0"
   resolved "https://registry.npmmirror.com/hexo-renderer-ejs/-/hexo-renderer-ejs-2.0.0.tgz"
@@ -732,7 +737,7 @@ hexo-util@^3.0.1, hexo-util@^3.1.0, hexo-util@^3.3.0:
     prismjs "^1.29.0"
     strip-indent "^3.0.0"
 
-hexo@^7.3.0:
+hexo@^7.3.0, hexo@>=4.0.0:
   version "7.3.0"
   resolved "https://registry.npmjs.org/hexo/-/hexo-7.3.0.tgz"
   integrity sha512-dOe8mzBKrvjubW5oBmyhcnQDpC+M2xmAMLae5K+o+SkHxyvAhShkS2VQZoTsOLIJKY6xilv7dzCjCvE7ol/NHQ==
