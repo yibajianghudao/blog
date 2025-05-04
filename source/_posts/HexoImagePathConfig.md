@@ -136,7 +136,7 @@ let cur_pagepath = post.permalink.slice(hexourl.length);
 
 ![2025-05-04_17-59](HexoImagePathConfig/2025-05-04_17-59.png)
 
-但后来我发现只是因为我在上面的配置中按照[hexo官方文档](https://hexo.io/zh-cn/docs/asset-folders#%E4%BD%BF%E7%94%A8-Markdown-%E5%B5%8C%E5%85%A5%E5%9B%BE%E7%89%87)设置` prependRoot: true`,该设置似乎和插件冲突,设置为`false`之后这个bug就没有了.
+但后来我发现只是因为我在上面的配置中按照[hexo官方文档](https://hexo.io/zh-cn/docs/asset-folders#%E4%BD%BF%E7%94%A8-Markdown-%E5%B5%8C%E5%85%A5%E5%9B%BE%E7%89%87)设置` prependRoot: true`,该设置似乎和插件冲突,设置为`false`之后这个bug就没有了,而且还不需要想办法修改github远程仓库的插件源代码.
 
 最后配置typora默认图像保存方式:
 
