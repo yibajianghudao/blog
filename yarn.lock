@@ -1190,6 +1190,11 @@ hexo-cli@^4.3.2:
     resolve "^1.20.0"
     tildify "^2.0.0"
 
+hexo-filename-title@^1.0.0:
+  version "1.0.0"
+  resolved "https://registry.npmjs.org/hexo-filename-title/-/hexo-filename-title-1.0.0.tgz"
+  integrity sha512-qn12fWfR91K3DMREc2h1Lry+3TksPy4n/zHZFKNUCIY4sGqfT8V8i4H03tC3qcRAiq8xt8cQuWfTmDTHh4G2Mg==
+
 hexo-front-matter@^4.2.1:
   version "4.2.1"
   resolved "https://registry.npmmirror.com/hexo-front-matter/-/hexo-front-matter-4.2.1.tgz"

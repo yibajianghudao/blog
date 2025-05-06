@@ -1,7 +1,9 @@
 ---
 title: StudyLinuxNote
+date: 2025-05-05 18:29:47
 tags:
 ---
+
 # StudyLinuxNote
 
 
@@ -39,7 +41,7 @@ ls -l `which sudo`
 
 #### 区别
 
-![Pictorial representation](assets/f7Ijz.jpg)
+![Pictorial representation](StudyLinuxNote/f7Ijz.jpg)
 
 - 软连接可以跨文件系统使用,硬连接只在同一个文件系统有效.
 - 如果创建连接后移动原文件,软连接会失效,硬连接依然有效
@@ -135,7 +137,7 @@ linux中的进程有一个进程状态:
 
 `ps aux`以标准格式显示所有正在运行的进程,除了-ef的结果,还有cpu使用率,内存使用率,占用内存大小,进程状态
 
-![ps](assets/ps.png)
+![ps](StudyLinuxNote/ps.png)
 
 `ps`命令经常与其他命令配合使用,例如和`kill`命令搭配随时中断,删除不必要的程序
 
@@ -148,7 +150,7 @@ ps aux | sort -rnk4 | head -5
 
 `top`命令可以动态的查看系统的整体运行情况,包括进程状态(僵尸进程等)
 
-![top](assets/top.png)
+![top](StudyLinuxNote/top.png)
 
 常用快捷键:
 
@@ -177,7 +179,7 @@ top -bn1 | awk 'NR=2'
 
 当一个进程停止时,其父进程会被告知,以便进行一些清理工作(比如释放内存空间,资源占用).然而,如果父进程没有意识到子进程的死亡(挂掉了),子进程就会进入僵尸状态．对于父进程来说，子进程仍然存在，但实际上子进程已经死亡并持续存在于系统中．
 
-![zombies-turnoff-800x467](assets/zombies-turnoff-800x467.webp)
+![zombies-turnoff-800x467](StudyLinuxNote/zombies-turnoff-800x467.webp)
 
 可以使用`ps aux | grep Z`找出僵尸进程的pid,然后通过`pstree -p | grep pid`查看僵尸进程的父进程,通过`kill pid`指令无法直接结束僵尸进程,需要结束僵尸进程的父进程才能结束僵尸进程.
 
@@ -311,7 +313,7 @@ systemd─┬─systemd──konsole───zsh───sleep
    如果是io导致的,排查出哪个进程导致的,通过`iotop -o`命令排查
 4. 具体分析进程问题
 
-![image-20250428010231121](assets/image-20250428010231121.png)
+![image-20250428010231121](StudyLinuxNote/image-20250428010231121.png)
 
 ### 服务管理
 
@@ -626,7 +628,7 @@ nobody:x:99:99:Nobody:/:/sbin/nologin
 newuser:x:1000:1000::/home/newuser:/bin/bash
 ```
 
-![image-20250421234937643](assets/image-20250421234937643.png)
+![image-20250421234937643](StudyLinuxNote/image-20250421234937643.png)
 
 /etc/shadow:
 
