@@ -6,20 +6,119 @@ tags:
 
 # StudyLinuxNote
 
-
 ## 基础
 
-### Shell
+### 特殊符号
 
-#### ``
+#### 引号
 
-特殊符號``中的命令會被優先執行,比如:
+| 引号     | 含义                                               |
+| -------- | -------------------------------------------------- |
+| 反引号   | 优先执行,先执行反引号里面的命令                    |
+| 单引号   | 单引号中的内容会原封不动的输出                     |
+| 双引号   | 和单引号类似,但双引号中的特殊符号会被解析          |
+| 不加引号 | 和双引号类似,额外支持通配符(匹配文件) *.log{1..10} |
 
 ```
+# 反引号
+# 先找到sudo命令的位置,然後對該位置運行ls
 ls -l `which sudo`
+
+# 单引号
+echo '`hostname` $(whoami) $UID {1..5}'
+`hostname` $(whoami) $UID {1..5}
+
+# 双引号
+echo "`hostname` $(whoami) $UID {1..5}"
+centos1 root 0 {1..5}
+
+# 不加引号
+echo `hostname` $(whoami) $UID {1..5}
+centos1 root 0 1 2 3 4 5
 ```
 
-先找到sudo命令的位置,然後對該位置運行ls
+#### 重定向符号
+
+##### 输出重定向
+
+> 默认状态下,标准输入(stdin)输入到命令/服务/进程中,并产生标准输出(stdout,1号出口)或标准错误输出(stderr,2号出口)并显示到屏幕上,还有其他输出可能会写入到文件中,重定向就是改变命令/进程/服务默认的输出,例如将stdout和stder均重定向到文件中.
+
+使用`1>`或`>`和`1>>`或`>>`可以重定向标准输出(stdout):
+
+```
+# 直接清空并写入
+echo {1..5} 1>111.txt
+# 追加
+echo {1..5} 1>>111.txt
+```
+
+使用`2>`和`2>>`可以重定向标准错误输出(stderr):
+
+```
+whoami -h 2>err.txt
+whoami -h 2>>err.txt
+```
+
+同时使用1和2可以将标准输出和标准错误输出一起重定向,常用于记录日志
+
+```
+# 同时重定向
+echo 123 >>111.txt 2>>111.txt
+
+# 简单写法 2>&1表示把标准错误输出写入到标准输出中,然后都追加到111.txt
+echo 123 >>111.txt 2>&1
+
+# 最简写法
+echo 123 &>>111.txt
+```
+
+##### 输入重定向
+
+使用`<`或`0<`符号进行输入重定向,常与固定命令配合:
+
+```
+# 与xargs搭配,指定读取文件内容,-n3表示把文件内容分成3组
+xargs -n3 <num.txt
+
+```
+
+`<<`(Here Document)
+
+用于向命令或脚本传递多行输入,将两个相同分隔符之间的内容作为输入流:
+
+基本语法:
+
+```bash
+command << DELIMITER
+	多行内容...
+DELIMITER
+```
+
+DELIMITER是自定义的分隔符,需要成对出现,常用的有(EOF,END)
+
+输入内容会从`<< DELIMITER`下一行开始,直到遇到独立的`DELIMITER`
+
+```bash
+cat > output.txt << 'END'
+111
+222
+333
+$PATH
+DEND
+'END'
+END
+```
+
+如果第一个`DELIMITER`不带单引号,`$PATH`会被解析,如果`DELIMITER`带了单引号,仍需要遇到不带单引号的`DELIMITER`才会停止,以上命令的结果如下:
+```bash
+cat output.txt 
+111
+222
+333
+$PATH
+DEND
+'END'
+```
 
 #### |
 
@@ -351,7 +450,7 @@ systemd─┬─systemd──konsole───zsh───sleep
 
 服务如果无法使用systemctl管理实现,可以使用`/etc/rm.local`文件(是一个符号连接,指向`/etc/rc.d/rc.local`),将服务启动命令写入到`/etc/rc.local`中即可(第一次使用需要`chmod +x /etc/rc.d/rc.local`)
 
-## Command
+## 命令
 
 ### vim
 查看行号: `:set nu` or `:set number`
@@ -458,7 +557,7 @@ linux下的文件拓展名仅仅用于展示,并不用来区分文件类型,linu
 2. 读取inode元数据校验权限
 3. 通过block指针访问文件内容
 
-#### 空间占用分析
+### 空间占用分析
 
 ##### 查看文件空间占用(stat)
 
@@ -473,11 +572,30 @@ $ stat test
 
 ##### 查看目录空间占用(du)
 
-```markdown
-`du -sh /*` 参数说明：
+```bash
+du -sh /*
+# 参数说明：
 - `-s`：显示总用量（不展开子目录）
 - `-h`：人性化单位显示（自动转换KB/MB/GB）
 ```
+
+#### 查看磁盘空间占用:
+
+```
+df -h 
+
+Filesystem               Size  Used Avail Use% Mounted on
+devtmpfs                 979M     0  979M   0% /dev
+tmpfs                    991M     0  991M   0% /dev/shm
+tmpfs                    991M  9.5M  981M   1% /run
+tmpfs                    991M     0  991M   0% /sys/fs/cgroup
+/dev/mapper/centos-root   17G  3.3G   14G  20% /
+/dev/sda1               1014M  161M  854M  16% /boot
+tmpfs                    199M     0  199M   0% /run/user/0
+/dev/sdb1               1014M 1014M  736K 100% /var/testlog
+```
+
+
 
 ### 日期与时间
 
@@ -812,6 +930,253 @@ drwxrwxrwt  17 root root  440 Apr 23 02:09 tmp
 
 使用`lsattr`命令可以查看这种特殊属性
 
+## 正则表达式
+
+### 通配符
+
+- `*`匹配零个或多个任意字符
+
+- `?`匹配单个任意字符(可使用多个?匹配任意个字符)
+
+  ```bash
+  ls
+  1  22  333
+  
+  ls ./??
+  ./22
+  ```
+
+- `{}`输出序列
+
+  ```bash
+  echo {1,2}
+  1 2
+  
+  echo {1..10}
+  1 2 3 4 5 6 7 8 9 10
+  
+  # 第二个..后为步进
+  echo {1..10..2}
+  1 3 5 7 9
+  
+  # ,前后为空,则表示空
+  echo output.txt{,.bak}
+  output.txt output.txt.bak
+  
+  # 可用于cp备份
+  cp output.txt{,.bak}
+  
+  -rw-r--r--. 1 root root   29 5月  10 22:16 output.txt
+  -rw-r--r--. 1 root root   29 5月  10 22:49 output.txt.bak
+  ```
+
+- `[]`方括号括起来的字符范围匹配在此范围内的任意字符,例如：`[A-Za-z]` 匹配任意的大小写字母.
+
+- `[!]`方括号括起来的指定字符前加一个`!`表示取反.
+
+  ```
+  ls [1-3]*
+  1  22  333
+  
+  ls [!1-2]*
+  333
+  ```
+
+### 基础正则
+
+正则表达式(regular expression,RE),一般分为基础正则(Basic RE)和拓展正则(Extended RE),以及Perl语言正则(其他)
+
+```
+# 下面测试的初始文本:
+cat RE.txt 
+nux for DevOps" course! In the fast-paced world of DevOps, proficiency in Linux is not just a skill but a necessity 
+
+Whether you are new to Linux or looking to deepen your skills, this course will guide you through essential concepts, command-line operations, and system administration tasks that form the backbone of Linux in the DevOps world
+
+You'll start with the basics, break down the command line (it's not as scary as it sounds!), and dive into the essential tools you need. Whether you're a complete beginner or just looking to level up your skills, we've got you covered
+
+No techy language, no unnecessary fluff—just practical learning that you can apply right away. Let's make Linux your friend
+```
+
+1. `^`以...开头的行
+
+   ```
+   cat RE.txt | grep '^Y'
+   You'll start with the basics, break down the command line (it's not as scary as it sounds!), and dive into the essential tools you need. Whether you're a complete beginner or just looking to level up your skills, we've got you covered
+   ```
+
+2. `$`以...结尾的行
+
+   ```
+   cat RE.txt | grep 'd$'
+   Whether you are new to Linux or looking to deepen your skills, this course will guide you through essential concepts, command-line operations, and system administration tasks that form the backbone of Linux in the DevOps world
+   You'll start with the basics, break down the command line (it's not as scary as it sounds!), and dive into the essential tools you need. Whether you're a complete beginner or just looking to level up your skills, we've got you covered
+   Whether you are new to Linux or looking to deepen your skills, this course will guide you through essential concepts, command-line operations, and system administration tasks that form the backbone of Linux in the DevOps world
+   You'll start with the basics, break down the command line (it's not as scary as it sounds!), and dive into the essential tools you need. Whether you're a complete beginner or just looking to level up your skills, we've got you covered
+   ```
+
+3. `^$`匹配空行
+
+   ```
+   cat RE.txt | grep -n '^$'
+   2:
+   4:
+   6:
+   ```
+
+4. `.`匹配任意一个字符,不匹配空行
+
+   ```
+   cat RE.txt | grep -n 'Linu.'
+   1:Wheth " course! In the fast-paced world of DevOps, proficiency in Linux is not just a skill but a necessity 
+   3:Whether you are new to Linux or looking to deepen your skills, this course will guide you through essential concepts, command-line operations, and system administration tasks that form the backbone of Linux in the DevOps world
+   7:No techy language, no unnecessary fluff—just practical learning that you can apply right away. Let's make Linux your friend r DevOps" course! In the fast-paced world of DevOps, proficiency in Linux is not just a skill but a necessity." course! In the fast-paced world of DevOps, proficiency in Linux is not just a skill but a necessity 
+   ```
+
+5. `\`转义字符
+
+   ```
+   cat RE.txt | grep '\.'
+   You'll start with the basics, break down the command line (it's not as scary as it sounds!), and dive into the essential tools you need. Whether you're a complete beginner or just looking to level up your skills, we've got you covered
+   No techy language, no unnecessary fluff—just practical learning that you can apply right away. Let's make Linux your friend r DevOps" course! In the fast-paced world of DevOps, proficiency in Linux is not just a skill but a necessity." course! In the fast-paced world of DevOps, proficiency in Linux is not just a skill but a necessity 
+   ```
+
+6. `*`前一字符出现0次或多次
+
+   ```
+   cat RE.txt | grep 'l*'
+   Wheth " course! In the fast-paced world of DevOps, proficiency in Linux is not just a skill but a necessity 
+   
+   Whether you are new to Linux or looking to deepen your skills, this course will guide you through essential concepts, command-line operations, and system administration tasks that form the backbone of Linux in the DevOps world
+   
+   You'll start with the basics, break down the command line (it's not as scary as it sounds!), and dive into the essential tools you need. Whether you're a complete beginner or just looking to level up your skills, we've got you covered
+   
+   No techy language, no unnecessary fluff—just practical learning that you can apply right away. Let's make Linux your friend r DevOps" course! In the fast-paced world of DevOps, proficiency in Linux is not just a skill but a necessity." course! In the fast-paced world of DevOps, proficiency in Linux is not just a skill but a necessity 
+   ```
+
+7. `.*`所有
+
+8. `[]`或者,共占一个字符
+
+   ```
+   # 匹配 will kill
+   cat RE.txt | grep -o '[wk]ill'
+   kill
+   kill
+   will
+   kill
+   kill
+   kill
+   # 匹配数字
+   cat RE.txt | grep '[0-9]'
+   # 匹配小写字母
+   cat RE.txt | grep -o '[a-z]ill'
+   kill
+   kill
+   will
+   kill
+   kill
+   kill
+   # 匹配大写字母
+   cat RE.txt | grep -o '[A-Z]inux'
+   Linux
+   Linux
+   Linux
+   Linux
+   Linux
+   Linux
+   # 匹配小写+大写字母
+   cat RE.txt | grep -o '[a-zA-Z]'
+   cat RE.txt | grep -o '[a-Z]'
+   ```
+
+9. `[^]`括号内取反
+
+   ```
+   cat RE.txt | grep -o '[^k]ill'
+   will
+   ```
+
+综合案例:
+
+匹配以m或n开头的行:`grep '^[mn]'`
+
+匹配以!或.或空格开头的行:`grep '[!. ]$'`(中括号会自动转义)
+
+`grep`命令`-o`参数可以显示匹配到的内容`-n`参数显示匹配到的行数`-E`能使用扩展正则表达式`-v`反转查找
+
+### 扩展正则
+
+1. `+`前一个字符连续出现1次或1次以上
+
+   ```
+   # 匹配多个0
+   grep -E '0+' re.txt
+   
+   # 匹配连续数字
+   grep -E '[0-9]+' re.txt
+   
+   # 匹配单词
+   grep -E '[a-Z]+' re.txt
+   ```
+
+2. `|`或者
+
+   ```
+   grep -E 'skill|Linux' re.txtcat
+   
+   # 排除sshd配置文件中的注释或空行
+   grep -Env '^$|^#' /etc/ssh/sshd_config 
+   ```
+
+3. `()`表示一个整体
+
+   ```
+   # 检查系统中vim,tree,lsof软件是否安装
+   rpm -qa | grep -E '^(vim|tree|lsof)'
+   vim-common-7.4.629-8.el7_9.x86_64
+   lsof-4.87-6.el7.x86_64
+   vim-minimal-7.4.629-8.el7_9.x86_64
+   vim-enhanced-7.4.629-8.el7_9.x86_64
+   vim-filesystem-7.4.629-8.el7_9.x86_64
+   ```
+
+4. `{}` 
+
+   `a{n}`前一个字符连续出现n次
+   `a{n,m}`前一个字符至少连续出现n次,至多连续出现m次
+   `a{n}`前一个字符至少连续出现n次
+   `a{,m}`前一个字符至多连续出现m次
+
+   ```
+   # 匹配身份证
+   grep -E '[0-9]{17}[0-9X]$' id.txt
+   
+   username 123189119960131234
+   two 12318911996061313X
+   ```
+
+5. `?`前一个字符出现0次或1次
+
+   ```
+   cat test.txt | grep -E 'goo?d'
+   god 
+   good
+   ```
+
+### Perl语言正则
+
+| 符号 | 含义                                    |
+| ---- | --------------------------------------- |
+| \d   | digit 数字 [0-9]                        |
+| \s   | 匹配空字符包括(空格,tab等) [\ \t\r\n\f] |
+| \w   | word 数字,字母,下划线[0-9a-Z_]          |
+| \D   | 排除数字 `[^0-9]`                       |
+| \S   | 非空字符                                |
+| \W   | 排除数字,字母和                         |
+
+
+
 ## 发行版
 
 ### 软件包管理
@@ -821,7 +1186,7 @@ drwxrwxrwt  17 root root  440 Apr 23 02:09 tmp
 1. 使用包管理器安装,例如`yum`,`apt`,`pacman`等工具.
 2. 手动从文件安装软件包,例如`rpm`,`dpkg`等软件包.
 3. 安装别人编译好的二进制文件.
-4. 从yuan dai ma手动编译安装
+4. 从源码手动编译安装
 
 #### 软件包安装方式
 
