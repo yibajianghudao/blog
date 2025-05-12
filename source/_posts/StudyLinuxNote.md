@@ -696,6 +696,35 @@ ps -ef | grep 'crond'
 
 `sed`命令使用脚本来处理文本文件或输出:
 
+| 参数       | 说明                                 |
+| ---------- | ------------------------------------ |
+| -n         | 抑制自动输出(仅显示脚本处理后的结果) |
+| -E / -r    | 使用拓展正则                         |
+| -i         | 直接修改文件内容而不输出到终端       |
+| -i[SUFFIX] | 如果SUFFIX提供,先进行备份            |
+
+`sed`中的过滤需要使用两个'/'包裹起来,其中支持基础正则,使用`-E/-r`参数支持扩展正则
+
+
+
+案例:
+
+```bash
+# 取出文件的第三行
+sed -n '3p' /etc/passwd
+
+# 取出文件的第2-5行
+sed -n '2,5p' /etc/passwd
+
+# 过滤/etc/passwd 中包含root的行:
+sed -n '/root/p' /etc/passwd
+
+# 过滤/etc/passwd 中以root开头的行:
+sed -n '/^root/p' /etc/passwd
+```
+
+
+
 在文件第4行添加行:`sed -e 4a\newLine testfile`
 
 将文件的内容列出并列印行号,同时删除2-5行:`nl testfile | sed '2,5d'`
