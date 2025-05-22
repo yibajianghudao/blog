@@ -4,6 +4,8 @@ date: 2025-05-05 18:29:47
 tags:
 ---
 
+
+
 # StudyLinuxNote
 
 ## 基础
@@ -623,7 +625,14 @@ ntpdate ntp1.aliyun.com
 修改時區:
 `timedatectl I set-timezone Asia/Shanghai`
 
-### 查询与过滤
+### 查询与过滤（四剑客）
+
+| 四剑客     | 特点                                     | 擅长                     |
+| ---------- | ---------------------------------------- | ------------------------ |
+| find       | 查找文件                                 | 查找文件，与其他命令配合 |
+| grep/egrep | 过滤                                     | 过滤速度最快             |
+| sed        | 过滤，取行，替换，删除                   | 替换，修改文件内容，取行 |
+| awk        | 过滤，取行，取列，统计计算，管理，循环…… | 取列，取行，统计计算     |
 
 #### find
 
@@ -642,7 +651,7 @@ ntpdate ntp1.aliyun.com
 find /etc/ -type f -name "*.conf" -size +10k -mtime +7
 ```
 
-##### 与其他命令共用
+与其他命令共用
 
 1. 使用``包裹find命令:
    ```bash
@@ -694,7 +703,7 @@ ps -ef | grep 'crond'
 
 #### sed
 
-`sed`命令使用脚本来处理文本文件或输出:
+`sed`是一种流编辑器，它是文本处理中非常重要的工具，能够完美的配合正则表达式使用，功能不同凡响。处理时，把**当前处理的行**存储在临时缓冲区中，称为“模式空间”（pattern space），接着用sed命令处理缓冲区中的内容，处理完成后，把缓冲区的内容送往屏幕。接着处理下一行，这样不断重复，直到文件末尾。文件内容并没有 改变，除非你使用重定向存储输出。`sed`主要用来自动编辑一个或多个文件；简化对文件的反复操作；编写转换程序等。
 
 | 参数       | 说明                                 |
 | ---------- | ------------------------------------ |
@@ -705,12 +714,40 @@ ps -ef | grep 'crond'
 
 `sed`中的过滤需要使用两个'/'包裹起来,其中支持基础正则,使用`-E/-r`参数支持扩展正则
 
-
-
-案例:
-
 ```bash
-# 取出文件的第三行
+# 初始文档
+cat test.txt 
+god 
+good
+```
+
+``` bash
+# 增加
+# a append
+sed '2a good god' test.txt 
+god 
+good
+good god
+
+# i insert
+sed '2i good god' test.txt 
+god 
+good god
+good
+
+# c replace
+sed '2c good god' test.txt 
+god 
+good god
+
+# 删除
+# d delete
+sed '2d' test.txt 
+god 
+sed -r '/^$|#/d' /etc/ssh/sshd_config
+
+# 查看
+# p print the pattern space.
 sed -n '3p' /etc/passwd
 
 # 取出文件的第2-5行
@@ -721,32 +758,140 @@ sed -n '/root/p' /etc/passwd
 
 # 过滤/etc/passwd 中以root开头的行:
 sed -n '/^root/p' /etc/passwd
+
+# 修改
+# s substitute
+sed 's/good/god/' test.txt
+god god god
+god good god good
+god god god good
+god
+god
+god
+god
+# 使用最后的/g选项可以替换一行中匹配到的所有文本
+sed 's/good/god/g' test.txt
+god god god
+god god god god
+god god god god
+god
+god
+god
+god
+# 使用-i[SUFFIX]可以先进行备份：
+sed -i.bak '3d' test.txt 
+ls
+test.txt  test.txt.bak
 ```
-
-
-
-在文件第4行添加行:`sed -e 4a\newLine testfile`
-
-将文件的内容列出并列印行号,同时删除2-5行:`nl testfile | sed '2,5d'`
 
 #### awk
 
-awk`提供编程语言的功能来处理文本文件,是一个强大的文本分析工具.
+`awk`提供编程语言的功能来处理文本文件,是一个强大的文本分析工具.
+
+语法形式：
+```bash
+awk [options] 'script' var=value file(s)
+awk [options] -f scriptfile var=value file(s)
+```
+
+常用命令选项：
+
+- `-F fs`指定输入分隔符fs，如`-F :`，默认分隔符是连续的空格或制表符
+- `-v var=value`赋值一个用户定义变量，将外部变量传递给awk
+- `-f scripfile`从脚本文件读取awk命令
+
+`awk`脚本是由模式和操作组成的。
+
+模式可以是以下任意一个：
+
+- /正则表达式/：使用通配符的扩展集。
+- 关系表达式：使用运算符进行操作，可以是字符串或数字的比较测试。
+- 模式匹配表达式：用运算符`~`（匹配）和`!~`（不匹配）。
+- BEGIN语句块、pattern语句块、END语句块
+
+操作由一个或多个命令、函数、表达式组成，之间由换行符或分号隔开，并位于大括号内，主要部分是：
+
+- 变量或数组赋值
+- 输出命令
+- 内置函数
+- 控制流语句
+
+`awk`脚本基本结构
 
 ```bash
-# 只显示第一列进程信息
-ps aux | awk '{print $1}'
-USER
-root
-root
-root
-root
-root
-root
-root
-root
-root
+awk 'BEGIN{ commands } pattern{ commands } END{ commands }' filename
 ```
+
+三部分都是可选的，脚本通常由单引号括起来。
+```bash
+awk 'BEGIN{ i=0 } { i++ } END{ print i }' filename
+```
+
+工作原理：
+
+1. 执行`BEGIN{ commands }`中的语句块
+2. 从文件或标准输入(stdin)读取一行，然后执行`pattern{ commands }`语句块，逐行扫描文件，从第一行到最后一行，知道文件被全部读取完毕
+3. 当读至输入流末尾，执行`END{ commands }`语句块
+
+```bash
+# 取行
+awk 'NR==1{print {$0}' test.txt
+# 默认行为就是打印
+awk 'NR==1' test.txt
+
+# 取2-5行
+awk 'NR>==2 && NR<=5' test.txt
+
+# 取包含root或nobody的行
+awk '/root|nobody/' test.txt
+# 取从包含root到包含nobody的行
+awk '/root/, /nobody/' test.txt
+```
+
+```bash
+# 取列
+# $数字表示第几列，$NF表示最后一列，$(NF-1)取倒数第二列
+ls -lh /etc/hosts |awk '{print $5,$(NF-1)}'
+
+# 取出下列的IP地址
+ip a s eth0 | awk 'NR==3'
+    inet 10.0.0.200/24 brd 10.0.0.255 scope global noprefixroute eth0
+# 连续切割
+ip a s eth0 | awk 'NR==3' | awk '{print $2}' | awk -F / '{print $1}'
+10.0.0.200
+# 使用每个空格或/切割
+ip a s eth0 | awk 'NR==3' | awk -F '[/ ]' '{print $6}'
+10.0.0.200
+# 使用连续空格或连续/切割
+ip a s eth0 | awk 'NR==3' | awk -F '[/ ]+' '{print $3}'
+10.0.0.200
+# 以inet 和/24为分隔符
+ip a s eth0 | awk 'NR==3' | awk -F 'inet |/24' '{print $2}'
+10.0.0.200
+```
+
+```bash
+# 取行和取列
+ip a s eth0 | awk -F 'inet |/24' 'NR==3{print $2}'
+10.0.0.200
+
+# 取出/etc/passwd文件中第3列大于大于100的行,取出这行的第1列,第3列和最后一列
+cat /etc/passwd | awk -F ':' '$3 > 100{print $1,$3,$NF}'
+systemd-network 192 /sbin/nologin
+polkitd 999 /sbin/nologin
+abrt 173 /sbin/nologin
+newuser 1000 /bin/bash
+```
+
+```bash
+# 统计
+awk '{i=i+1} END{print i}' /etc/passwd
+26
+```
+
+#### 其他
+
+1. 可以使用`column -t`将结果按列分隔打印
 
 ## 用户/用户组管理
 
@@ -1206,6 +1351,140 @@ No techy language, no unnecessary fluff—just practical learning that you can a
 
 
 
+## 服务
+
+> 在历史上，systemd中的“服务”（service）被称作[守护进程（daemon）](https://en.wikipedia.org/wiki/Daemon_(computing))，它们在后台运行（即没有UI、不与终端交互），等待特定事件的发生并提供服务。例如，Web服务器会等待一个请求以提供相应的页面，SSH服务器会等待登录请求。除了这种提供完整功能的，还有一些守护进程的工作是隐藏在幕后的，如负责向日志文件写入消息的`syslog`、`metalog`，确保系统时间准确的[ntpd](https://wiki.archlinuxcn.org/wiki/Ntpd)。
+
+服务的使用流程:部署(安装),配置,优化,排障,其他(监控,备份,日志,认证)
+
+### 定时任务
+
+`cron`是一个在 Unix 及类似操作系统上执行计划任务的程序。cron 使用户能够安排工作(命令或shell脚本)在特定时间、日期或间隔定期运行，通常用于系统的自动化维护或者管理。
+
+它的工作方式为，每分钟唤醒并检查用户是否有 crontab 清单，以及清单上是否有应该执行的计划工作。
+
+基础系统默认使用systemd的Timers,除此之外还有一些[实现](https://wiki.gentoo.org/wiki/Cron/zh-cn)需要单独安装：
+
+- cronie
+- dcron
+- fcron
+- bcron
+- anacron
+
+#### 使用`cronie`
+
+cronie软件包提供了可以用systemctl控制的服务文件,例如`crond.service`或`cronie.service`.
+
+`/etc/crontab`系统定时任务的配置文件
+`/var/spool/cron`是用户的定时任务的配置文件目录
+`/var/log.cron`存放定时任务的日志
+
+`/etc/cron.monthly/`,`/etc/cron.weekly/`,`/etc/cron.daily/`,`/etc/cron.hourly/`,分别是每月,每周,每日,每小时运行的系统定时任务,启动cron服务时会出触发所有这类任务.
+
+> **注意：**cronie 提供了 `0anacron` 任务，每小时执行一次，它允许[延迟运行](https://wiki.archlinuxcn.org/wiki/Cron#异步任务处理)其他某些任务，比如因为未开机而延迟的任务。
+
+`crontab`是管理定时任务的命令(注意 **crontab** 既是计划工作清单的名字，也是编辑这一清单的命令。)
+
+| crontab    | 说明                              | 相当于                       |
+| ---------- | --------------------------------- | ---------------------------- |
+| crontab -e | edit,编辑当前用户的定时任务       | vi /var/spool/cron/username  |
+| crontab -l | list,查看当前用户的定时任务       | cat /var/spool/cron/username |
+| crontab -r | delete,删除当前用户所有的定时任务 | rm /var/spool/cron/username  |
+
+#### 书写格式
+
+基础格式:
+```
+＃分钟(0-59)　小时(0-23)　日期(1-31)　月份(1-12)　周几(0-6) 	执行的命令
+	* * * * *	comand to be executed
+```
+
+例子:
+
+```
+# 每天早上8:30去学校
+30 08 * * *		go to school
+# 晚上12点上床睡觉
+00 00 * * *		go to bed
+```
+
+| 时间部分特殊符号 | 说明         | 案例                                                         |
+| ---------------- | ------------ | ------------------------------------------------------------ |
+| /                | 每隔多少时间 | */2 * * * * 每两分钟<br />00 */2 * * * 每两小时              |
+| -                | 表示范围     | 00 08-22 * * * 08-22点每个小时运行<br />00 08-22/3 * * * 08-22点每3小时运行 |
+| ,                | 表示独立时间 | 00 08,11,14,17,20 * * *                                      |
+| *                | 每,全部      | * * * * *                                                    |
+
+书写定时任务：
+
+- 添加注释
+- 尽量使用脚本
+- 脚本中的命令使用绝对路径（只能识别`/bin/`和`/usr/bin`）
+- 执行的命令或脚本数据定向到空或追加到文件
+
+#### 案例
+
+```
+# 每两分钟同步系统时间
+# /vat/spool/cron/root
+*/2 * * * *	ntpdate ntp1.aliyun.com >/dev/null 2>&1
+```
+
+```
+# 每天定时备份/etc目录(使用脚本)
+# backupetc.sh
+#!/bin/bash
+tar zcf /root/backup/etc-`date +%F`.tar.gz /etc/
+
+# /var/spool/cron/root
+# backup /etc/ dir ervery day
+00 04 * * * bash /root/script/backupetc.sh
+
+```
+
+> 脚本的调试：`bash -x`来显示脚本的执行过程，由+开头的行表示脚本背后执行的过程，例如：
+> ```
+> # backupetc.sh
+> #!/bin/bash
+> tar zcf /root/backup/etc-`date +%F`.tar.gz /etc/
+> 
+> bash -x script/backupetc.sh 
+> ++ date +%F_%w
+> + time=2025-05-21_3
+> + tar zcf /root/backup/etc-2025-05-21_3.tar.gz /etc/
+> tar: 从成员名中删除开头的“/”
+> ```
+
+```
+# 脚本使用变量
+#!/bin/bash
+time=`date +%F_%w`
+tar zcf /root/backup/etc-$time.tar.gz /etc/
+```
+
+```
+# 定时备份/etc/到/root/backup以主机IP地址加时间命名
+# backupetc.sh
+#!/bin/bash
+ip=`hostname -I | awk '{print $1}'`
+time=`date +%F_%w`
+
+mkdir -p /root/backup/$ip
+tar zcf /root/backup/$ip/etc-$time.tar.gz /etc/
+```
+
+#### 故障
+
+1. 脚本的`%`需要转义
+2. 脚本只能识别`/bin`和`/usr/bin`下的命令
+   解决方案：
+   - 使用命令的绝对路径
+   - 在脚本开头添加命令所在目录到PATH中
+3. 定时任务没有定向到空或追加到文件中导致终端一直打印信息
+   解决方案：
+   - `command &>/dev/null`
+   - `command &>>/tmp/script.log`
+
 ## 发行版
 
 ### 软件包管理
@@ -1257,8 +1536,3 @@ wget -O /etc/yum.repos.d/CentOS-Base.repo https://mirrors.aliyun.com/repo/Centos
 | 检查    | rpm -qa(query all) package<br />rpm -ql # 查看软件包内容<br />rpm -qf 文件或命令的绝对路径 # 查看文件或命令所归属的软件包 |
 | 升级    | rpm -Uvh 升级软件包                                          |
 | 删除    | rpm -e package                                               |
-
-
-
-
-
