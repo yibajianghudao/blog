@@ -15,16 +15,36 @@ tags:
 
 #### 交换机
 
+交换机实现一个网络内多台主机之间的通讯,在数据前使用mac地址表示目标地址和源地址.
+
+> mac地址:
+>
+> 每块网卡上都有的一个用于标识身份信息的物理地址
+>
+> mac地址全球唯一,不能进行修改,mac地址用16进制标识
+
 - 交换机的端口上连接的所有终端设备，均在同一个网段（局域网LAN）上，称为一个广播域
-- 产生广播消耗设备CPU资源
-- 终端用户的设备一般接入交换机连接
-- 一个网段会有一个统一的网络标识，例如网段192.168.15.xxx
+
+  一个网段会有一个统一的网络标识，例如网段192.168.15.xxx
+
+- 网络通信初期会利用广播方式发送数据报,在通讯过程中,数据报的发送是有去无回的,在一个交换网络中如果产生了大量广播数据包时会产生广播风暴,影响主机性能.
+
+  可以通过将一个大的交换网络切分为几个小交换网络来解决.
+
 - 企业级交换机会有一些基本的安全功能（例如只让某些设备有广播权限）
-- 交换机工作在OSI模型的第二层，也叫二层交换
+
+- 交换机一般工作在OSI模型的第二层，也叫二层交换
+  也存在工作在三层的交换机,类似路由器使用
+  
+- 交换机仅负责传递帧,并不修改帧的内容
 
 #### 路由器
 
-路由器用于连接不同的网络，核心功能是路由选择和分组转发
+路由器用于连接不同的网络，实现不同网络之间的主机通讯.可以隔离广播风暴.核心功能是路由选择和分组转发
+
+1. 路由选择:路由器可以决定从来源到目的地所采用的路径
+2. 分组转发:路由器会将资料转传到所选路径的下一个装置,重复这个过程,分组可以抵达目的地.
+3. 负载均衡:路由器有时会用多个不同路径,传递相同资料的副本
 
 WAN口是公网输入口,LAN口是局域网输出口
 
@@ -36,9 +56,310 @@ WAN口是公网输入口,LAN口是局域网输出口
 #### 区别
 
 1. 路由器是工作在第三层，可以识别IP，具备第三层功能(DHCP,自动分配IP)
-   交换机工作在第二层,只能识别到mac地址.
+   交换机一般工作在第二层,只能识别到mac地址.
 2. 路由器可连接超过两个以上不同的网络，而交換机只能连接两个
 3. 路由器接口较少,交换机接口较多
+
+### 网络传输
+
+#### 进行网络传输的条件:
+
+1. 身份标识:通信设备需要唯一的网络层标识(IP地址)和数据链路层标识(MAC地址)
+2. 路由可达(网络层):需要由路由器(公网范围内传输)且路由器知道如何到达目标主机
+3. 传输层协议和端口号:标识数据包属于哪个应用程序进程,并提供端到端的通信服务
+4. 域名解析:需要将域名转换为IP地址
+5. 物理连接和接口:需要由网卡和交换机
+6. 网络协议栈支持:操作系统支持完整的网络协议栈
+7. 网络地址转换(NAT):将私网IP转换为公网IP
+
+#### 网络传输流程
+
+设备的应用程序(源IP:192.168.11.10)需要访问一个IP地址，操作系统查看路由表，路由表指明目标网络是匹配内网路由（内网）或匹配默认路由（外网）
+
+##### 内网传输
+
+目标IP:192.168.11.100
+
+1. 因为目标在同一局域网，系统不需要网关，它会通过内网卡在本地网络上发送一个ARP广播请求(通过交换机对广播域所有设备进行广播)，询问目标IP对应的MAC地址。
+2. 获取到目标IP的MAC地址后，操作系统将数据包(包含源IP与目标IP)封装在以太网帧中(包含源MAC和目标MAC),并将数据帧通过网线发送到连接的交换机,交换机通过目标MAC地址表将帧仅转发到连接者目标IP的那个端口.
+
+##### 外网传输
+
+目标IP:110.242.68.4(通过DNS请求获取到了`www.baidu.com`的IP地址)
+
+1. 默认路由指向一个默认网关的IP地址,操作系统通过外网卡在其连接的网络上发送ARP广播,请求默认网关的MAC地址
+2. 网关设备回复其MAC地址后,操作系统进行数据包的封装(源IP与目标公网IP)及帧的封装(源MAC和**默认网关**的MAC)并通过外网卡发出
+3. NAT(网络地址转换)设备收到数据包后识别出源IP(192.168.11.10)是一个私有IP地址,不能在公网上路由,于是NAT设备进行SNAT(源地址转换),它将数据报的源IP从私有IP(192.168.11.10)替换为分配给外网卡的公网IP(221.218.210.53).同时它会修改源端口号,并创建一个NAT转换表项记录这个映射关系(内网IP:端口<-->公网IP:端口).
+   NAT设备用自己的公网接口地址作为源重新发送修改后的数据包到互联网.
+4. 公网路由:修改后的数据包(221.218.210.53->110.242.68.4)开始在互联网上被路由,最终到达百度服务器.
+5. 返回后响应包通过DNAT转换为对应的私有IP(可能会还原端口号),并将目标MAC地址设置为原操作系统的外网卡的MAC地址(通过ARP或已有缓存).并最终返回到源操作系统被处理(根据端口好发送到对应的应用程序).
+
+举例:通过路由器相连的两个网段的网络传输
+
+![image-20250530232801905](StudyComputerNetwork/image-20250530232801905.png)
+
+#### 网络模拟
+
+使用**cisco packet tracer**软件模拟网络：
+
+##### 相邻两个网段通过路由器连接
+
+![image-20250531144747925](StudyComputerNetwork/image-20250531144747925.png)
+
+配置路由器实现两不同网段的通信(192.168.16.253-->11.22.33.44)：
+```
+# 首先进入用户模式：
+Router>
+# 输入en(enable)进入特权模式
+Router> en
+# 显示
+Router#show ip route
+
+# 		直连			静态			
+Codes: C - connected, S - static, I - IGRP, R - RIP, M - mobile, B - BGP
+       D - EIGRP, EX - EIGRP external, O - OSPF, IA - OSPF inter area
+       N1 - OSPF NSSA external type 1, N2 - OSPF NSSA external type 2
+       E1 - OSPF external type 1, E2 - OSPF external type 2, E - EGP
+       i - IS-IS, L1 - IS-IS level-1, L2 - IS-IS level-2, ia - IS-IS inter area
+       * - candidate default, U - per-user static route, o - ODR
+       P - periodic downloaded static route
+
+Gateway of last resort is not set
+
+# 进入配置模式
+Router#config t
+Enter configuration commands, one per line.  End with CNTL/Z.
+Router(config)#
+
+# 进入接口模式
+Router(config)#int fa0/0	#进入fa0/0接口
+Router(config-if)#
+
+# 查看帮助
+Router(config-if)#?
+Router(config-if)#ip ?
+
+# 配置IP
+Router(config-if)# ip address 192.168.16.1 255.255.255.0
+
+# 启动接口
+Router(config-if)# no shut
+
+# 配置第二个接口
+Router(config)#int fa0/1
+Router(config-if)#ip address 11.22.33.1 255.255.255.0
+Router(config-if)#no shutdown
+
+# 退出当前模式
+Router(config-if)#exit
+Router(config)#exit
+Router#
+
+# 查看路由表
+Router#show ip route
+Codes: C - connected, S - static, I - IGRP, R - RIP, M - mobile, B - BGP
+       D - EIGRP, EX - EIGRP external, O - OSPF, IA - OSPF inter area
+       N1 - OSPF NSSA external type 1, N2 - OSPF NSSA external type 2
+       E1 - OSPF external type 1, E2 - OSPF external type 2, E - EGP
+       i - IS-IS, L1 - IS-IS level-1, L2 - IS-IS level-2, ia - IS-IS inter area
+       * - candidate default, U - per-user static route, o - ODR
+       P - periodic downloaded static route
+
+Gateway of last resort is not set
+
+     11.0.0.0/24 is subnetted, 1 subnets
+C       11.22.33.0 is directly connected, FastEthernet0/1	# 两个直连网络
+C    192.168.16.0/24 is directly connected, FastEthernet0/0
+```
+
+配置完路由器的IP之后仍然无法ping通,还需要配置网关.
+
+![image-20250531150711212](StudyComputerNetwork/image-20250531150711212.png)
+
+##### 通过多个路由器连接的网段
+
+![image-20250531212544862](StudyComputerNetwork/image-20250531212544862.png)
+
+```
+# 重新配置路由器1的IP
+Router#config t
+Enter configuration commands, one per line.  End with CNTL/Z.
+Router(config)#interface fa0/1
+# 清除原来配置的IP地址
+Router(config-if)#no ip address
+Router(config-if)#ip address 192.168.2.1 255.255.255.0
+Router(config-if)#no shut
+# 路由器命名为R1
+Router(config-if)#exit
+Router(config)#hostname R1
+R1(config)#
+```
+
+以此类推,经过配置后的路由表如下:
+R1:
+
+```
+C    192.168.2.0/24 is directly connected, FastEthernet0/1
+C    192.168.16.0/24 is directly connected, FastEthernet0/0
+```
+
+R2:
+
+```
+C    192.168.2.0/24 is directly connected, FastEthernet0/0
+C    192.168.3.0/24 is directly connected, FastEthernet0/1
+```
+
+R3:
+
+```
+C       11.22.33.0 is directly connected, FastEthernet0/1
+C    192.168.3.0/24 is directly connected, FastEthernet0/0
+```
+
+此时R1能ping通R2的fa0/0接口(192.168.2.2)
+
+```Type escape sequence to abort.
+R1>ping 192.168.2.2
+
+Type escape sequence to abort.
+Sending 5, 100-byte ICMP Echos to 192.168.2.2, timeout is 2 seconds:
+.!!!!	# '!'表示ping通,'.'表示不通
+Success rate is 80 percent (4/5), round-trip min/avg/max = 0/0/0 ms
+```
+
+但并不能ping通R2的fa0/1接口(192.168.3.1):
+```
+R1>ping 192.168.3.1
+
+Type escape sequence to abort.
+Sending 5, 100-byte ICMP Echos to 192.168.3.1, timeout is 2 seconds:
+.....
+Success rate is 0 percent (0/5)
+```
+
+因为R1的路由表中并没有192.168.3.0网段的记录,所以需要手动指定路由
+
+#### 路由
+
+##### 静态路由
+
+静态路由需要手动配置,工作量很大
+
+![1](StudyComputerNetwork/1.png)
+
+```
+# 手动添加路由
+R1(config)#ip route 11.22.33.0 255.255.255.0 192.168.2.2
+
+R1#show ip route
+
+     11.0.0.0/24 is subnetted, 1 subnets
+S(表示静态路由)       11.22.33.0 [1/0] via 192.168.2.2
+C    192.168.2.0/24 is directly connected, FastEthernet0/1
+C    192.168.16.0/24 is directly connected, FastEthernet0/0
+```
+
+同理可以配置R2,R3路由器:
+
+```
+# R2
+R2(config)#ip route 11.22.33.0 255.255.255.0 192.168.3.2
+# 配置回址
+R2(config)#ip route 192.168.16.0 255.255.255.0 192.168.2.1
+
+R2#show ip route
+
+     11.0.0.0/24 is subnetted, 1 subnets
+S       11.22.33.0 [1/0] via 192.168.3.2
+C    192.168.2.0/24 is directly connected, FastEthernet0/0
+C    192.168.3.0/24 is directly connected, FastEthernet0/1
+S    192.168.16.0/24 [1/0] via 192.168.2.1
+
+
+#R3,只需要配置回址
+R3(config)#ip route 192.168.16.0 255.255.255.0 192.168.3.1
+
+R3#show ip route
+Codes: C - connected, S - static, I - IGRP, R - RIP, M - mobile, B - BGP
+       D - EIGRP, EX - EIGRP external, O - OSPF, IA - OSPF inter area
+       N1 - OSPF NSSA external type 1, N2 - OSPF NSSA external type 2
+       E1 - OSPF external type 1, E2 - OSPF external type 2, E - EGP
+       i - IS-IS, L1 - IS-IS level-1, L2 - IS-IS level-2, ia - IS-IS inter area
+       * - candidate default, U - per-user static route, o - ODR
+       P - periodic downloaded static route
+
+Gateway of last resort is not set
+
+     11.0.0.0/24 is subnetted, 1 subnets
+C       11.22.33.0 is directly connected, FastEthernet0/1
+C    192.168.3.0/24 is directly connected, FastEthernet0/0
+S    192.168.16.0/24 [1/0] via 192.168.3.1
+
+```
+
+此时通过PC0(192.168.16.253)可以ping通PC1(11.22.33.44),但是在R1上无法ping通,因为R3中没有192.168.2.0网段的路由地址,IMCP需要手动配置.
+
+##### 动态路由
+
+动态路由可以动态学习路由
+
+1. 自动学习相邻路由器(直连)的路由表信息.
+2. 必须遵从相同的协议如:rip ospf eigrp isis bgp
+
+#### IP地址
+
+IP地址是逻辑地址,通常以**点分十进制**格式表示,例如`192.168.11.10`,用于在网络层标识设备和跨网络路由.
+
+IP地址由网络前缀和主机标识组成.**子网掩码**用于区分这两部分.
+
+举例:IP`192.168.11.10\24`的IP为`192.168.11.10`,子网掩码为`255.255.255.0`,网络前缀`192.168.11`，主机标识`.10`。该网络可用主机地址范围：`192.168.11.1`-`192.168.11.254` (`.0`是网络地址,`.255`是广播地址).
+
+#### MAC地址
+
+MAC地址是物理地址,固化在网卡硬件中,用于在同一物理网络内(广播域)直接标识设备.
+
+#### 端口
+
+服务器和服务器之间通信是使用端口进行通信
+
+端口的范围是1-65535.
+
+#### NAT
+
+NAT(network address translation)网络地址转换
+
+##### 静态NAT
+
+基本网络地址转换(Basic NAT)也被称作"静态NAT",仅支持地址转换,不支持端口映射.要求每一个当前连接都对应一个公网IP地址.
+
+Basic NAT要维护一个无端口号NAT表,结构如下:
+
+|    内网IP     |     外网IP      |
+| :-----------: | :-------------: |
+| 192.168.1.55  | 219.152.168.222 |
+| 192.168.1.59  | 219.152.168.223 |
+| 192.168.1.155 | 219.152.168.224 |
+
+##### 网络地址端口转换
+
+NAPT 这种方式支持传输层协议(TCP,UDP等)的端口映射,并允许多台主机共享一个公网IP地址.
+
+> 支持端口转换的NAT又可以分为两类：源地址转换和目的地址转换。前一种情形下发起连接的计算机的IP地址将会被重写，使得内网主机发出的数据包能够到达外网主机。后一种情况下被连接计算机的IP地址将被重写，使得外网主机发出的数据包能够到达内网主机。实际上，以上两种方式通常会一起被使用以支持双向通信。
+
+NAPT维护一个带有IP以及端口号的NAT表，结构如下:
+
+|      内网IP       |        外网IP        |
+| :---------------: | :------------------: |
+| 192.168.1.55:5566 | 219.152.168.222:9200 |
+|  192.168.1.59:80  | 219.152.168.222:9201 |
+| 192.168.1.59:4465 | 219.152.168.222:9202 |
+
+一个使用NAPT的网络结构图:
+
+![NAT](StudyComputerNetwork/NAT-1748787752034-3.png)
+
+一台电脑大概需要70个随机端口,一个公网IP大概支持700-900台电脑
 
 ### OSI七层模型
 
@@ -104,13 +425,39 @@ TCP连接通过三次握手和四次挥手进行建立连接和断开连接，�
 
 TCP与端口建立连接时双方要经过3次握手.
 
-1. 客户端发送:**SYN建立连接请求**包括一个随机数seq*111*
-2. 服务端发送:**ACK(确认),SYN(与客户端建立连接)**,包括一个新的seq*333*和确认号ack(seq+1)*112*
-3. 客户端发送:**ACK确认建立连接请求**包括seq(上一次请求的ack)*112*,ack(新seq+1)*334*
+假设A的seq从10000开始,B的seq从20000开始
 
-![image-20250526222043993](StudyComputerNetwork/image-20250526222043993.png)
+![image](StudyComputerNetwork/1926214-20200521145514637-1811603917.png)
+
+1. :one::A向B发送一个SYN包(建立连接请求),seq为初始化的随机值,这里假设为10000,此时ACK序号为0.
+2. :two::B收到后会发送一个对SYN的确认包,包括ACK和一个SYN,表示对第一个包的确认,并继续握手操作.
+   此时B也会以一个随机值来初始化seq,这里假设为20000.B的ACK是A的seq+1,即10000+1=10001,表明已经收到A的请求,B方的序列号由20000开始,由于A的SYN包消耗了1字节,所以B期望下一个收到的序列号从10001开始.
+3. :three::A收到SYN+ACK包后回复一个确认包(ACK)通知B连接已建立.
+   它的seq是上一个请求(A发出的SYN请求)的seq+1(也等于B返回的ACK),它的ACK是B的seq+1,即20000+1=20001,用于确认收到B的SYN请求(同样syn也消耗了一个字节)
+
+##### 数据传输
+
+![image](StudyComputerNetwork/1926214-20200521145515554-191151512.png)
+
+1. :four::A发起Get请求,由于:three:的len=0,且没有syn或fin标志,因此没有消耗seq的值,seq不变,依旧是10001.ACK序号确认的还是上一个收到的:two:.​​
+2. :five::B对收到的:four:发出回应,告诉A已经收到.由于上个请求:two:消耗了一字节,这里seq为20001.ACK为:four:的seq+len=1001+183=10184
+3. :six::B发送200ok,由于:five:长度为0没有消耗seq,这里seq仍然为20001,ACK序列号确认的还是上一个收到的:four:
+
+##### 4次挥手
+
+TCP断开连接时需要4次挥手
+
+![image](StudyComputerNetwork/1926214-20200521145517043-2014366136.png)
+
+1. :seven::A发送FIN断开连接请求(此处与对:six:的确认包合并了)​​
+2. :eight::确认:seven:.:seven:的长度为0,但是有FIN标志,因此ACK+1=10185
+3. :nine::确认:eight:,:eight:长度为0,但是有FIN标志,消耗一字节,因此ACK+1=20156
 
 ###### 状态变化:
+
+![clipboard](StudyComputerNetwork/1926214-20200521145512632-1779245686.png)
+
+**三次握手**:
 
 初始时客户端,服务端都处于CLOSED状态
 
@@ -120,18 +467,7 @@ TCP与端口建立连接时双方要经过3次握手.
 2. 服务端接受请求并返回ACK,SYN请求后,服务端状态变为SYN_RECVD(received)
 3. 客户端收到SYN并返回ACK请求后,客户端状态变为ESTABLISHED,服务端接收到ACK请求后,服务端状态变为ESTABLISHED.
 
-##### 4次挥手
-
-TCP断开连接时需要4次挥手
-
-1. 客户端发送:断开连接请求FIN,包含seq(握手时的ack)*334*,ack(握手时的seq+1)*113*
-2. 服务端收到请求,发送确认请求ACK,发送seq(ack)*113*,ack(seq+1)*335*
-3. 服务端发送断开连接请求FIN,包含seq*113*,ack*335*,由于都是服务端发送,均与上一请求一致.
-4. 客户端发送确认请求ACK,包含seq(ack)335,ack(seq+1)114
-
-![image-20250526222447170](StudyComputerNetwork/image-20250526222447170.png)
-
-###### 状态变化:
+**四次挥手**:
 
 断开连接前,客户端与服务端均处于ESTABLISHED状态
 
@@ -162,6 +498,9 @@ DNS是域名解析服务/协议,提供将域名解析到IP的服务。
 
 可以在网卡配置文件中配置DNS解析服务器，例如223.5.5.5
 
+DNS是树状结构
+![img](StudyComputerNetwork/bg2022080106.webp)
+
 根域名是`.`
 
 顶级域名`.com`,`.org`等
@@ -172,7 +511,18 @@ DNS是域名解析服务/协议,提供将域名解析到IP的服务。
 
 ##### DNS解析流程
 
+浏览器输入域名`www.baidu.com`访问后进行**递归查询**:
 
+1. 访问浏览器的缓存
+2. 访问本地的HOSTS文件
+3. 访问操作系统的缓存
+4. 访问手动配置或自动获取的的本地DNS(LDNS Local DNS)或运营商的缓存
+   例如223.5.5.5在阿里云
+5. 若运营商缓存不存在该记录,则会进行**迭代查询**:
+   1. LDNS前往根域名服务器查询,根域名服务器存储一级域名(.com)服务器的IP地址
+   2. LDNS前往`.com`服务器查询权威域名服务器(baidu.com)的IP地址
+   3. LDNS前往`baidu.com`服务器查询`www.baidu.com`的服务器IP地址.baidu.com服务器会查询自己的A记录解析并返回给LDNS(A记录:域名和IP的对应关系)
+6. LDNS查询到IP后缓存然后返回给浏览器
 
 #### ARP
 
@@ -238,4 +588,26 @@ dhcpv6-client http https ssh
 
 ### ss
 
-d 
+
+
+### traceroute
+
+**traceroute命令**用于追踪数据包在网络上的传输时的全部路径,通过traceroute我们可以知道信息从你的计算机到互联网另一端的主机是走的什么路径.
+
+`traceroute bilibili.com`
+
+## 参考链接:
+
+1. https://www.cnblogs.com/realjimmy/p/12930797.html
+
+
+
+# 题目
+
+## 路由器
+
+### 为什么把两个交换机互联并不能进行网段间的通信呢?
+
+交换机的核心功能是在同一个广播域内进行高校的帧交换.当一台设备需要与另一设备通信时,若另一设备与源设备不在同一网段中,源设备并不会使用ARP广播搜寻目标设备的MAC地址,而是通过ARP广播询问默认网关的MAC地址并将打包好的帧传输给默认网关.若没有配置默认网关,则会直接导致通信失败.
+
+即使在某种情况下源设备知道了目标设备的IP地址并通过交换机的泛洪传递到了目标设备,通信也只是单项的.目标设备在检查到源IP后回复包时依旧会计算出目标IP不在同一网段并将其发送到默认网关中导致通信失败.
