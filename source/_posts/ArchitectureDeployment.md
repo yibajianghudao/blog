@@ -117,7 +117,7 @@ network:
 我们需要新建自己的配置文件:
 
 ```
-vim 01-static-config.yaml 
+vim /etc/netplan/01-static-config.yaml
 network:
   ethernets:
     ens33:
@@ -164,6 +164,67 @@ ip address
 ```
 
 
+
+> 我又新加了一个网卡用于局域网:
+>
+> ![image-20250615195740659](ArchitectureDeployment/image-20250615195740659.png)
+>
+> 首先查看新的网卡名:
+>
+> ```
+> ip address
+> 1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+>     link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+>     inet 127.0.0.1/8 scope host lo
+>        valid_lft forever preferred_lft forever
+>     inet6 ::1/128 scope host 
+>        valid_lft forever preferred_lft forever
+> 2: ens33: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+>     link/ether 00:0c:29:9f:d3:7c brd ff:ff:ff:ff:ff:ff
+>     altname enp2s1
+>     inet 11.0.0.80/24 brd 11.0.0.255 scope global ens33
+>        valid_lft forever preferred_lft forever
+>     inet6 fe80::20c:29ff:fe9f:d37c/64 scope link 
+>        valid_lft forever preferred_lft forever
+> 3: ens37: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+>     link/ether 00:0c:29:9f:d3:86 brd ff:ff:ff:ff:ff:ff
+>     altname enp2s5
+>        valid_lft forever preferred_lft forever
+>     inet6 fe80::20c:29ff:fe9f:d386/64 scope link 
+>        valid_lft forever preferred_lft forever
+> ```
+>
+> 
+>
+> 然后在配置文件`/etc/netplan/01-static-config.yaml`给该网卡配置IP:
+>
+> ```
+> network:
+>   ethernets:
+>     ens33:
+>       dhcp4: no
+>       addresses:
+>         - 11.0.0.80/24
+>       routes:
+>         - to: default
+>           via: 11.0.0.1
+>       nameservers:
+>         addresses: [223.5.5.5]
+>     # 需要使用 ip address 指令查看新建的网卡名
+>     ens37:
+>       dhcp4: no
+>       addresses:
+>         - 192.168.163.80/24
+>   version: 2
+> ```
+>
+> 接着应用即可:
+>
+> ```
+> netplan generate
+> 
+> netplan apply
+> ```
 
 ## 配置
 
