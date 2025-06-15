@@ -231,7 +231,21 @@ linux中的进程有一个进程状态:
 | +                         | 当前进程运行在前台,R+表示该进程在前台运行                    |
 | l                         | 进程是多线程的,sl表示进程是以线程方式运行<br />使用多线程可以让服务或软件支持更改的访问 |
 
-#### `ps`
+#### 僵尸进程
+
+当一个进程停止时,其父进程会被告知,以便进行一些清理工作(比如释放内存空间,资源占用).然而,如果父进程没有意识到子进程的死亡(挂掉了),子进程就会进入僵尸状态．对于父进程来说，子进程仍然存在，但实际上子进程已经死亡并持续存在于系统中．
+
+![zombies-turnoff-800x467](StudyLinuxNote/zombies-turnoff-800x467.webp)
+
+可以使用`ps aux | grep Z`找出僵尸进程的pid,然后通过`pstree -p | grep pid`查看僵尸进程的父进程,通过`kill pid`指令无法直接结束僵尸进程,需要结束僵尸进程的父进程才能结束僵尸进程.
+
+#### 孤儿进程
+
+孤儿进程指其父进程执行完成或被终止后仍继续运行的一类进程,孤儿进程会被系统直接接管(system进程)
+
+#### 查看进程信息
+
+##### `ps`
 
 `ps`命令用于静态查看当前系统的进程状态,常见的命令有:
 `ps -ef`以BSD格式显示所有正在运行的进程的UID,PID,PPID(父进程的id),CMD(进程名字)
@@ -247,7 +261,7 @@ linux中的进程有一个进程状态:
 ps aux | sort -rnk4 | head -5
 ```
 
-#### top
+##### top
 
 `top`命令可以动态的查看系统的整体运行情况,包括进程状态(僵尸进程等)
 
@@ -272,21 +286,7 @@ ps aux | sort -rnk4 | head -5
 top -bn1 | awk 'NR=2'
 ```
 
-
-
 `htop`是top的增强版,支持使用鼠标进行操作.
-
-#### 僵尸进程
-
-当一个进程停止时,其父进程会被告知,以便进行一些清理工作(比如释放内存空间,资源占用).然而,如果父进程没有意识到子进程的死亡(挂掉了),子进程就会进入僵尸状态．对于父进程来说，子进程仍然存在，但实际上子进程已经死亡并持续存在于系统中．
-
-![zombies-turnoff-800x467](StudyLinuxNote/zombies-turnoff-800x467.webp)
-
-可以使用`ps aux | grep Z`找出僵尸进程的pid,然后通过`pstree -p | grep pid`查看僵尸进程的父进程,通过`kill pid`指令无法直接结束僵尸进程,需要结束僵尸进程的父进程才能结束僵尸进程.
-
-#### 孤儿进程
-
-孤儿进程指其父进程执行完成或被终止后仍继续运行的一类进程,孤儿进程会被系统直接接管(system进程)
 
 #### 结束进程
 
@@ -900,8 +900,8 @@ linux是一个多用户系统,每个用户有一个标记即`UID`,`GID`.
 ### `UID`规律
 
 - root:uid=0
-- 普通用户:uid>=1000,需要手动创建,无法对系统进行修改,只拥有当前家目录的权限
-- 虚拟用户:uid<1000,也叫做傀儡用户,用于服务,进程运行使用的用户,无法直接使用
+- 普通用户:uid<1000,需要手动创建,无法对系统进行修改,只拥有当前家目录的权限
+- 虚拟用户:uid>=1000,也叫做傀儡用户,用于服务,进程运行使用的用户,无法直接使用
 
 ### 用户相关文件
 
@@ -1484,6 +1484,51 @@ tar zcf /root/backup/$ip/etc-$time.tar.gz /etc/
    解决方案：
    - `command &>/dev/null`
    - `command &>>/tmp/script.log`
+
+## 监控
+
+### 文件监控
+
+#### lsof
+
+**lsof命令** 用于查看你进程打开的文件，打开文件的进程，进程打开的端口(TCP、UDP)。找回/恢复删除的文件。是十分方便的系统监视工具，因为lsof命令需要访问核心内存和各种文件，所以需要root用户执行。
+
+例如,可以查看某个日志文件被哪个进程产生
+
+### 系统资源监控
+
+#### lscpu
+
+检查当前系统的cpu状态:
+```bash
+[root@nfs nginx]#lscpu
+Architecture:          x86_64
+CPU op-mode(s):        32-bit, 64-bit
+Byte Order:            Little Endian
+CPU(s):                4
+On-line CPU(s) list:   0-3
+Thread(s) per core:    1
+Core(s) per socket:    2
+Socket(s):             2
+NUMA node(s):          1
+Vendor ID:             GenuineIntel
+CPU family:            6
+Model:                 63
+Model name:            Intel(R) Xeon(R) CPU E5-2673 v3 @ 2.40GHz
+Stepping:              2
+CPU MHz:               2394.454
+BogoMIPS:              4788.90
+Hypervisor vendor:     VMware
+Virtualization type:   full
+L1d cache:             32K
+L1i cache:             32K
+L2 cache:              256K
+L3 cache:              30720K
+NUMA node0 CPU(s):     0-3
+Flags:                 fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss ht syscall nx pdpe1gb rdtscp lm constant_tsc arch_perfmon nopl xtopology tsc_reliable nonstop_tsc eagerfpu pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm invpcid_single ssbd ibrs ibpb stibp fsgsbase tsc_adjust bmi1 avx2 smep bmi2 invpcid xsaveopt arat md_clear spec_ctrl intel_stibp flush_l1d arch_capabilities
+```
+
+
 
 ## 发行版
 

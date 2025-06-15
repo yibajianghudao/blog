@@ -157,3 +157,35 @@ mkinitcpio -p linux		#或者直接mkinitcpio -P
 1. 终端运行：`sudo grub-mkconfig -o /boot/grub/grub.cfg`
    重启后问题解决。
 
+
+
+## VMware
+
+### The specified virtual disk needs repair
+
+可能是由于非正常关机导致的磁盘错误,需要修复.
+
+查看该虚拟机目录下的`vmware.log`得到下面的报错:
+```
+2025-06-14T08:55:12.643Z In(05)+ vmx Power on failure messages: The specified virtual disk needs repair
+2025-06-14T08:55:12.643Z In(05)+ vmx Cannot open the disk '/home/user/vmware/Centos-10.0.0.7/CentOS7_1-cl1-000001.vmdk' or one of the snapshot disks it depends on.
+```
+
+使用`vmware-vdiskmanager`修复一下`CentOS7_1-cl1-000001.vmdk`:
+
+```
+$ vmware-vdiskmanager -R CentOS7_1-cl1-000001.vmdk 
+
+# 使用-e检查一致性
+$ vmware-vdiskmanager -e CentOS7_1-cl1-000001.vmdk
+Failed to open the disk '/home/user/vmware/Centos-10.0.0.7/CentOS7_1-cl1-000001.vmdk' : The parent of this virtual disk could not be opened (0x3e8c).
+Disk link /home/user/vmware/Centos-10.0.0.7/CentOS7_1-cl1-000001.vmdk successfully opened.
+Failed to open the disk '/home/user/vmware/Centos-10.0.0.7/CentOS7_1-cl1.vmdk' : The specified virtual disk needs repair (0x3e86).
+Disk chain is not consistent: The parent of this virtual disk could not be opened (0x3e8c).
+
+# 还需要修复CentOS7_1-cl1.vmdk
+$ vmware-vdiskmanager -R CentOS7_1-cl1.vmdk                 
+The virtual disk, 'CentOS7_1-cl1.vmdk', was corrupted and has been successfully repaired.
+
+```
+
