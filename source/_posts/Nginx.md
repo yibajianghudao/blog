@@ -1155,7 +1155,7 @@ server{
 }
 ```
 
-## 文件上传限制
+### 文件上传限制
 
 ```
 # 修改nginx配置
@@ -1169,7 +1169,642 @@ upload_max_filesize = 20M
 max_file_uploads = 20
 ```
 
+# 反向代理
+
+在没有代理模式的情况下，客户端和`Nginx`服务端，都是客户端直接请求服务端，服务端直接响应客户端。
+
+![img](Nginx/5e435a5b2556957b61000001.png)
+
+在互联网请求里面,客户端往往无法直接向服务端发起请求,那么就需要用到代理服务,来实现客户端和服务通信，如下图所示
+
+![img](Nginx/5e435a9d2556957b61000003.png)
+
+1. 正向代理
+   正向代理的程序位于客户端,为客户端服务例如公司内网机器通过代理访问内网:
+
+   ![img](Nginx/5e435aba2556957b61000004.png)
+
+2. 反向代理
+   反向代理，用于公司集群架构中，为服务端服务,客户端->代理<—>服务端
+   ![img](Nginx/5e435acb2556957b61000005.png)
+
+Nginx作为代理服务，可支持的代理协议非常的多:
+
+![img](Nginx/5e435adc2556957b61000006.png)
+
+![img](Nginx/5e435aee2556957b61000007.png)
+
+## 模块
+
+*反向代理模式与Nginx代理模块总结如表格所示*
+
+| **反向代理模式**       | **Nginx\****配置模块**  |
+| ---------------------- | ----------------------- |
+| http、websocket、https | ngx_http_proxy_module   |
+| fastcgi                | ngx_http_fastcgi_module |
+| uwsgi                  | ngx_http_uwsgi_module   |
+| grpc                   | ngx_http_v2_module      |
+
+## 语法
+
+代理配置语法
+
+### url跳转修改返回location
+
+```
+Syntax:    proxy_pass URL;
+Default:    —
+Context:    location, if in location, limit_except
+
+http://localhost:8000/uri/
+http://192.168.56.11:8000/uri/
+http://unix:/tmp/backend.socket:/uri/
+```
+
+### `url`跳转修改返回`Location`[不常用]
+
+```
+Syntax:    proxy_redirect default;
+proxy_redirect off;proxy_redirect redirect replacement;
+Default:    proxy_redirect default;
+Context:    http, server, location
+```
+
+### 添加发往后端服务器的请求头信息
+
+```
+Syntax:    proxy_set_header field value;
+Default:    proxy_set_header Host $proxy_host;
+            proxy_set_header Connection close;
+Context:    http, server, location
+
+# 用户请求的时候HOST的值是www.oldboy.com, 那么代理服务会像后端传递请求的还是www.oldboy.com
+proxy_set_header Host $http_host;
+# 将$remote_addr的值放进变量X-Real-IP中，$remote_addr的值为客户端的ip
+proxy_set_header X-Real-IP $remote_addr;
+# 客户端通过代理服务访问后端服务, 后端服务通过该变量会记录真实客户端地址
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+```
+
+### 代理到后端的TCP连接、响应、返回等超时时间
+
+```
+//nginx代理与后端服务器连接超时时间(代理连接超时)
+Syntax: proxy_connect_timeout time;
+Default: proxy_connect_timeout 60s;
+Context: http, server, location
+
+//nginx代理等待后端服务器的响应时间
+Syntax:    proxy_read_timeout time;
+Default:    proxy_read_timeout 60s;
+Context:    http, server, location
+
+//后端服务器数据回传给nginx代理超时时间
+Syntax: proxy_send_timeout time;
+Default: proxy_send_timeout 60s;
+Context: http, server, location
+```
+
+### proxy_buffer代理缓冲区
+
+```
+//nignx会把后端返回的内容先放到缓冲区当中，然后再返回给客户端,边收边传, 不是全部接收完再传给客户端
+Syntax: proxy_buffering on | off;
+Default: proxy_buffering on;
+Context: http, server, location
+
+//设置nginx代理保存用户头信息的缓冲区大小
+Syntax: proxy_buffer_size size;
+Default: proxy_buffer_size 4k|8k;
+Context: http, server, location
+
+//proxy_buffers 缓冲区
+Syntax: proxy_buffers number size;
+Default: proxy_buffers 8 4k|8k;
+Context: http, server, location
+```
+
+### 常用优化配置
+
+Proxy代理网站常用优化配置如下，将配置写入新文件，调用时使用include引用即可
+
+```
+[root@Nginx ~]# vim /etc/nginx/proxy_params
+proxy_set_header Host $http_host;
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+proxy_connect_timeout 30;
+proxy_send_timeout 60;
+proxy_read_timeout 60;
+
+proxy_buffering on;
+proxy_buffer_size 32k;
+proxy_buffers 4 128k;
+```
+
+### 重复使用配置
+
+*代理配置location时调用方便后续多个Location重复使用*
+
+```
+location / {
+    proxy_pass http://127.0.0.1:8080;
+    include proxy_params;
+}
+```
+
+## 配置
+
+### 转发至web01静态页面
+
+在web01上配置静态页面:
+
+```
+[root@web01 ~]#vim /etc/nginx/conf.d/static.conf
+server{
+    listen 80;
+    server_name www.static.com;
+
+    location / {
+    root /code/static;
+    index index.html;
+	}
+}
+[root@web01 ~]#mkdir /code/static
+[root@web01 ~]#echo "web01 static page" > /code/static/index.html
+```
+
+安装nignx:
+
+```
+scp -rp root@172.16.1.7:/etc/yum.repos.d/* /etc/yum.repos.d/
+yum -y install nginx
+```
+
+配置反向代理:
+
+```
+[root@db1 ~]#vim /etc/nginx/conf.d/default.conf 
+server {
+        listen 80;
+        server_name www.static.com;
+
+        location / {
+        proxy_pass http://172.16.1.7;
+}
+
+}
+```
+
+此时访问www.static.com并不会访问到web01的静态页面,而是进入了web默认的home.conf,配置文件如下:
+```
+limit_conn_zone $binary_remote_addr zone=addr:10m;
+limit_req_zone $binary_remote_addr zone=one:10m rate=1r/s;
+
+server{
+    listen 80;
+    server_name _;
+
+    charset utf-8.gbk;
+
+    limit_conn addr 1;
+    limit_req zone=one burst=3 nodelay;
+    limit_req_status 478;
+
+    error_page 478 /err/478.html;
+
+    location / {
+        root /code/chess;
+        index index.html;
+    }
+    location /download {
+        alias /code/chess/download;
+        autoindex on;
+        autoindex_exact_size off;
+        autoindex_format html;
+        autoindex_localtime on;
+    }
+    location /status {
+        stub_status;
+    }
+    location /access_module {
+        deny 10.0.0.31;
+        allow 10.0.0.0/24;
+
+        auth_basic           "closed site";
+        auth_basic_user_file auth_pass;
+
+        alias /code/chess;
+        index index.html;
+    }
+    location ^~ /err/ {
+        alias /code/chess/err/;
+    }
+}
+```
+
+该配置文件也监听172.16.1.7(web01的ip),但是lb服务器在转发的时候没有配置请求头,可以通过抓包工具查看:
+
+![image-20250616114421521](Nginx/image-20250616114421521.png)
+
+![image-20250616114514474](Nginx/image-20250616114514474.png)
+
+> 抓包需要把LB的配置文件中转发地址设置为公网IP10.0.0.7(vmnet8),以及host主机(.253)的hosts文件修改为10.0.0.5(LB服务器)
+
+抓包显示的另一个问题是,LB服务器转发后的http版本由1.1(长连接)变为了1.0(短连接)
+
+#### 转发服务器地址
+
+修改配置文件添加服务器的请求头信息:
+
+```
+[root@db1 ~]#vim /etc/nginx/conf.d/default.conf 
+server {
+        listen 80;
+        server_name www.static.com;
+
+        location / {
+        proxy_pass http://10.0.0.7;
+        proxy_set_header Host $http_host;
+        proxy_http_version 1.1;
+}
+
+}
+```
+
+再次抓包发现问题解决:
+![image-20250616120544968](Nginx/image-20250616120544968.png)
+
+同时主机得到了正确的响应:
+
+```
+[root@host ~]#curl www.static.com
+web01 static page
+```
+
+#### 转发客户端地址
+
+nginx转发后显示的客户端地址变成了LB服务器的IP:
+
+```
+[root@web01 ~]#tail -f /var/log/nginx/access.log
+10.0.0.5 - - [16/Jun/2025:12:06:15 +0800] "GET / HTTP/1.1" 200 18 "-" "curl/7.29.0" "-"
+10.0.0.5 - - [16/Jun/2025:16:05:01 +0800] "GET / HTTP/1.1" 200 18 "-" "curl/7.29.0" "-"
+```
+
+在LB服务器中添加下面的配置:
+
+```
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+```
+
+然后web01的nginx日志如下:
+
+```
+10.0.0.5 - - [16/Jun/2025:20:23:26 +0800] "GET / HTTP/1.1" 200 18 "-" "curl/7.29.0" "10.0.0.253"
+```
+
+可以看到在末尾输出了客户端地址,输出格式在`/etc/nginx/nginx.conf`中:
+
+```
+# $http_x_forwarded_for 即为客户端真实地址
+log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+```
+
+#### 超时时间
+
+1. `proxy_connect_timeout`
+2. `proxy_read_timeout`
+3. `proxy_send_timeout`
+
+| 指令                        | 作用阶段                                    | 主要关注点                        | 触发原因示例                                          | 超时后果 (对客户端)     | 默认值 |
+| :-------------------------- | :------------------------------------------ | :-------------------------------- | :---------------------------------------------------- | :---------------------- | :----- |
+| **`proxy_connect_timeout`** | 开始建立 TCP 连接到完成三次握手最大等待时间 | 能否连上后端？                    | 后端宕机、端口不通、网络不通、后端过载拒接            | 502 Bad Gateway         | 60s    |
+| **`proxy_read_timeout`**    | Nginx发送完请求到后端发送响应最大等待时间   | 后端响应是否及时/连续？           | 后端处理慢(卡在发送头/体)、网络慢(读间隔长)、慢速消费 | 504 Gateway Timeout     | 60s    |
+| **`proxy_send_timeout`**    | 发送数据到后端的最大允许时间                | Nginx 发送请求数据是否顺利/连续？ | 发送大请求体网络慢、后端读取请求慢导致Nginx发送阻塞   | 连接关闭 (可能导致 5xx) | 60s    |
+
+#### 缓冲区
+
+开启proxy_buffer后,nginx会将后端返回的内容先放到缓冲区中然后再返回给客户端,变收变传,而不是全部接收后再传递给客户端
+
+1. proxy_buffer_size size,保存请求头的缓冲区大小
+2. proxy_buffers number size,保存请求内容,number指缓冲区数量,size是每个缓冲区的大小,一般size指定为4k或8k即可
+
+最终配置如下:
+```
+server {
+        listen 80;
+        server_name www.static.com;
+
+        location / {
+        proxy_pass http://10.0.0.7;
+        proxy_set_header Host $http_host;
+        proxy_http_version 1.1;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+        proxy_connect_timeout 30;
+        proxy_send_timeout 60;
+        proxy_read_timeout 60;
+
+        proxy_buffering on;
+        proxy_buffer_size 32k;
+        proxy_buffers 4 128k;
+                                                                 }
+          
+}
+```
 
 
 
+
+
+## 限制
+
+单台服务器运行服务端时,多个客户端使用不同的端口访问相同的服务端端口,服务端只需要一个端口就可以使用:
+
+![单服务端口](Nginx/单服务端口.png)
+
+而使用代理之后,代理服务器需要使用不同的端口请求服务器:
+
+![代理端口](Nginx/代理端口.png)
+
+因此可能会出现端口不够用的情况,此时可以用四层代理解决
+
+# 负载均衡(load balance)
+
+
+
+当**Web**服务器直接面向用户，往往要承载大量并发请求，单台服务器难以负荷，使用多台**Web**服务器组成集群，前端使用`Nginx`负载均衡，将请求分散的打到后端服务器集群中，实现负载的分发。会大大提升系统的吞吐率、请求性能、高容灾
+
+![img](Nginx/5e43d6452556957b6100000a-1750079571433-2.png)
+
+往往我们接触的最多的是`SLB(Server Load Balance)`服务器负载均衡，实现最多的也是`SLB`、那么`SLB`它的调度节点和服务节点通常是在一个地域里面。那么它在这个小的逻辑地域里面决定了他对部分服务的实时性、响应性是非常好的。
+
+所以说当海量用户请求过来以后，它同样是请求调度节点，调度节点将用户的请求转发给后端对应的服务节点，服务节点处理完请求后在转发给调度节点，调度节点最后响应给用户节点。这样也能实现一个均衡的作用，那么**Nginx**则是一个典型的`SLB`
+
+负载均衡分为四层负载和七层负载:
+
+四层负载均衡数据包在底层就进行了分发，而七层负载均衡数据包则是在最顶层进行分发、由此可以看出，七层负载均衡效率没有四负载均衡高。
+
+但七层负载均衡更贴近于服务，如:**http**协议就是七层协议，我们可以用**Nginx**可以作会话保持，**URL**路径规则匹配、**head**头改写等等，这些是四层负载均衡无法实现的。
+
+> 四层负载均衡不识别域名，七层负载均衡识别域名
+
+## 七层负载
+
+七层负载均衡是在应用层，那么它可以完成很多应用方面的协议请求，比如我们说的**http**应用的负载均衡，它可以实现**http**信息的改写、头信息的改写、安全应用规则控制、**URL**匹配规则控制、以及转发、**rewrite**等等的规则，所以在应用层的服务里面，我们可以做的内容就更多，Nginx则是一个典型的七层负载均衡`SLB`
+
+Nginx要实现负载均衡需要用到`proxy_pass`代理模块配置.前面我们使用该代理模块将静态请求代理到了web01.
+
+Nginx负载均衡与**Nginx**代理不同地方在于，**Nginx**的一个`location`仅能代理一台服务器，而**Nginx**负载均衡则是将客户端请求代理转发至一组**upstream**虚拟服务池.
+
+![img](Nginx/5e43d6e12556957b6100000f.png)
+
+### 语法
+
+```
+Syntax: upstream name { ... }
+Default: -
+Context: http
+
+#upstream例
+upstream backend {
+    server backend1.example.com       weight=5;
+    server backend2.example.com:8080;
+    server unix:/tmp/backend3;
+    server backup1.example.com:8080   backup;
+}
+server {
+    location / {
+        proxy_pass http://backend;
+    }
+}
+```
+
+### 配置
+
+原本的静态代理配置文件如下:
+```
+[root@db1 ~]#vim /etc/nginx/conf.d/default.conf
+server {
+        listen 80;
+        server_name www.static.com;
+
+        location / {
+        proxy_pass http://10.0.0.7;
+        include proxy_params;
+        }
+         
+}
+```
+
+#### 负载均衡
+
+修改后的配置文件:
+
+```
+upstream node{
+        server 172.16.1.7:80;
+        server 172.16.1.8:80;
+
+}
+server {
+        listen 80;
+        server_name www.static.com;
+
+        location / {
+        proxy_pass http://node;
+        include proxy_params;
+        }
+
+}
+```
+
+#### 错误转移
+
+如果后台服务连接超时，Nginx是本身是有机制的，如果出现一个节点down掉的时候，Nginx会更据你具体负载均衡的设置，将请求转移到其他的节点上，但是，如果后台服务连接没有down掉，但是返回错误异常码了如:504、502、500,这个时候你需要加一个负载均衡的设置，如下：proxy_next_upstream http_500 | http_502 | http_503 | http_504 |http_404;意思是，当其中一台返回错误码404,500…等错误时，可以分配到下一台服务器程序继续处理，提高平台访问成功率。
+
+```
+server {
+    listen 80;
+    server_name www.static.com;
+
+    location / {
+        proxy_pass http://node;
+        proxy_next_upstream error timeout http_500 http_502 http_503 http_504;
+    }
+}
+```
+
+#### 调度算法
+
+| **调度算法** | **概述**                                                     |
+| ------------ | ------------------------------------------------------------ |
+| 轮询         | 按时间顺序逐一分配到不同的后端服务器(默认)                   |
+| weight       | 加权轮询,weight值越大,分配到的访问几率越高                   |
+| ip_hash      | 每个请求按访问IP的hash结果分配,这样来自同一IP的固定访问一个后端服务器 |
+| url_hash     | 按照访问URL的hash结果来分配请求,是每个URL定向到同一个后端服务器 |
+| least_conn   | 最少链接数,那个机器链接数少就分发                            |
+
+轮询(默认):
+
+```
+upstream load_pass {
+    server 10.0.0.7:80;
+    server 10.0.0.8:80;
+}
+```
+
+权重轮询:
+
+```
+upstream load_pass {
+    server 10.0.0.7:80 weight=5;
+    server 10.0.0.8:80;
+}
+```
+
+IP_hash:
+
+```
+#如果客户端都走相同代理, 会导致某一台服务器连接过多
+upstream load_pass {
+    ip_hash;
+    server 10.0.0.7:80 weight=5;
+    server 10.0.0.8:80;
+}
+```
+
+#### 后端状态
+
+后端Web服务器在前端Nginx负载均衡调度中的状态
+
+| **状态**     | **概述**                          |
+| ------------ | --------------------------------- |
+| down         | 当前的server暂时不参与负载均衡    |
+| backup       | 预留的备份服务器                  |
+| max_fails    | 允许请求失败的次数                |
+| fail_timeout | 经过max_fails失败后, 服务暂停时间 |
+| max_conns    | 限制最大的接收连接数              |
+
+down状态测试该Server不参与负载均衡的调度
+
+```bash
+upstream load_pass {
+    #不参与任何调度, 一般用于停机维护
+    server 10.0.0.7:80 down;
+}
+```
+
+backup以及down状态
+
+```bash
+upstream load_pass {
+    server 10.0.0.7:80 down;
+    server 10.0.0.8:80 backup;
+    server 10.0.0.9:80 max_fails=1 fail_timeout=10s;
+}
+
+location  / {
+    proxy_pass http://load_pass;
+    include proxy_params;
+}
+```
+
+max_fails失败次数和fail_timeout多少时间内失败多少次则标记down
+
+```bash
+upstream load_pass {
+    server 10.0.0.7:80;
+    server 10.0.0.8:80 max_fails=2 fail_timeout=10s;
+}
+```
+
+max_conns最大TCP连接数
+
+```bash
+upstream load_pass {
+    server 10.0.0.7:80;
+    server 10.0.0.8:80 max_conns=1;
+}
+```
+
+
+
+
+
+## 四层负载
+
+所谓四层负载均衡指的是`OSI`七层模型中的传输层，那么传输层**Nginx**已经能支持**TCP/IP**的控制，所以只需要对客户端的请求进行**TCP/IP**协议的包转发就可以实现负载均衡，那么它的好处是性能非常快、只需要底层进行应用处理，而不需要进行一些复杂的逻辑。
+
+
+
+
+
+
+
+# 其他
+
+## 技巧
+
+### 配置文件导入
+
+例如下面的配置文件`/etc/nginx/conf.d/default.conf`:
+
+```
+server {
+        listen 80;
+        server_name www.static.com;
+
+        location / {
+        proxy_pass http://10.0.0.7;
+        proxy_set_header Host $http_host;
+        proxy_http_version 1.1;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+        proxy_connect_timeout 30;
+        proxy_send_timeout 60;
+        proxy_read_timeout 60;
+
+        proxy_buffering on;
+        proxy_buffer_size 32k;
+        proxy_buffers 4 128k;
+        }
+          
+}
+```
+
+可以新建一个`/etc/nginx/proxy_params`
+
+```
+proxy_set_header Host $http_host;
+        proxy_http_version 1.1;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+        proxy_connect_timeout 30;
+        proxy_send_timeout 60;
+        proxy_read_timeout 60;
+
+        proxy_buffering on;
+        proxy_buffer_size 32k;
+        proxy_buffers 4 128k;
+```
+
+然后在default.conf中导入:
+
+```
+server {
+        listen 80;
+        server_name www.static.com;
+
+        location / {
+        proxy_pass http://10.0.0.7;
+        include proxy_params;
+        }
+          
+}
+```
 

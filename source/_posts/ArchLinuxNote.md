@@ -189,3 +189,38 @@ The virtual disk, 'CentOS7_1-cl1.vmdk', was corrupted and has been successfully 
 
 ```
 
+## grub
+
+### 设置默认选择上一次启动的内核
+
+```
+vim /etc/default/grub  
+
+# 结尾添加
+GRUB_SAVEDEFAULT=true
+GRUB_DEFAULT=saved
+```
+
+## Tabby
+
+SSH连接是遇到:
+```
+X The name is not activatable
+```
+
+参考[帖子](https://bbs.archlinux.org/viewtopic.php?id=291847)安装`gnome-keyring`包解决.
+
+## Windterm
+
+使用了[dracula](https://github.com/dracula/windterm)主题,遇到了一些例如标签页过低的问题,发现有[issues](https://github.com/dracula/windterm/issues/1)提到了
+
+> Replace `$(AppDir)` with `${AppDir}` in the gui file
+
+## freerdp2
+
+安装:`sudo pacman -S freerdp2`
+
+```
+xfreerdp /v:ip:3389 /u:administrator /p:passwd /w:1920 /h:1080
+```
+
