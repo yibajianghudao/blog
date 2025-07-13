@@ -6,6 +6,261 @@ tags:
 
 # MySQL
 
+## 远程访问
+
+访问远程服务器的数据库可以使用
+```
+mysql -uroot -p -h IP:Port
+```
+
+远程数据库需要提前设置才能被正常访问:
+
+### 创建用户
+
+创建一个用户来管理数据库,不要使用root用户
+
+```
+# '%'表明用户允许被远程访问,也可以限制访问IP,如:`'sql'@'192.168.163.%'`
+CREATE USER 'sql'@'%' IDENTIFIED WITH mysql_native_password BY '123456';
+```
+
+### 创建数据库
+
+```
+CREATE DATABASE sqltest;
+```
+
+### 设置权限
+
+```
+GRANT ALL PRIVILEGES ON *.* TO 'sql'@'%';
+
+# 刷新权限
+FLUSH PRIVILEGES;
+```
+
+### MySQL配置监听地址
+
+```
+sudo vim /etc/mysql/mysql.conf.d/mysqld.cnf
+bind-address            = 0.0.0.0
+
+sudo systemctl restart mysql
+```
+
+## 备份
+
+### 备份类型
+
+#### 逻辑备份
+
+逻辑备份通过执行SQL语句来备份数据库的数据和结构
+
+逻辑备份生成SQL脚本,可以跨平台和版本使用,但备份和恢复速度较慢
+
+常用`mysqldump`命令
+
+```
+# 备份单个数据库
+mysqldump -u [username] -p [database_name] > backup.sql
+
+# 备份所有数据库
+mysqldump -u [username] -p --all-databases > all_databases.sql
+
+# 备份特定表
+mysqldump -u [username] -p [database_name] [table_name] > table_backup.sql
+
+# 包含存储过程和触发器
+mysqldump -u [username] -p --routines --triggers [database_name] > backup_with_routines.sql
+```
+
+恢复命令:
+
+```
+# 恢复前需要确保数据库已被创建
+mysql -u [username] -p [database_name] < backup.sql
+```
+
+#### 物理备份
+
+物理备份直接复制数据库的文件,例如InnoDB的`.idb`文件
+
+物理备份的备份和恢复速度块,备份文件依赖数据库版本和平台,不便于跨平台使用
+
+物理备份可以使用`mysqlbackup`(对于InnoDB),`xtrabackup`或直接复制文件
+
+```
+# 使用 xtrabackup 进行物理备份
+xtrabackup --backup --user=[username] --password=[password] --target-dir=/backup/xtrabackup
+```
+
+恢复:
+
+```
+# 使用 xtrabackup 恢复
+xtrabackup --prepare --target-dir=/backup/xtrabackup
+xtrabackup --copy-back --target-dir=/backup/xtrabackup
+```
+
+### 备份策略
+
+#### 热备份/冷备份
+
+- 热备份会在数据库运行时进行备份,不影响数据库的正常使用,适合生产环境
+  ```
+  # 使用 mysqldump 进行热备份
+  mysqldump -u [username] -p --single-transaction [database_name] > hot_backup.sql
+  
+  # 使用 xtrabackup 进行热备份
+  xtrabackup --backup --user=[username] --password=[password] --target-dir=/backup/hot_backup
+  ```
+
+- 冷备份在数据库停止运行时进行的备份,保证数据的一致性,适合对一致性要求比较高的场景
+  ```
+  # 停止 MySQL 服务
+  systemctl stop mysql
+  
+  # 复制数据目录
+  cp -r /var/lib/mysql /backup/cold_backup
+  
+  # 启动 MySQL 服务
+  systemctl start mysql
+  ```
+
+#### 全量备份/增量备份
+
+- 全量备份备份数据库的全部数据和结构,数据完整,恢复简单,但文件较大,备份时间长
+  `mysqldump`和`xtrabackup`默认使用全量备份
+
+- 增量备份只备份自上次以来的变化部分,数据量小,备份速度快,但恢复时需要结合全量备份和所有增量备份
+  ```
+  # 使用 xtrabackup 进行增量备份（基于上一次全量或增量备份）
+  xtrabackup --backup --user=[username] --password=[password] --target-dir=/backup/incremental_backup --incremental-basedir=/backup/full_backup
+  ```
+
+  恢复:
+  ```
+  # 准备全量备份
+  xtrabackup --prepare --apply-log-only --target-dir=/backup/full_backup
+  
+  # 准备增量备份
+  xtrabackup --prepare --apply-log-only --target-dir=/backup/full_backup --incremental-dir=/backup/incremental_backup
+  
+  # 最终准备并恢复
+  xtrabackup --prepare --target-dir=/backup/full_backup
+  xtrabackup --copy-back --target-dir=/backup/full_backup
+  ```
+
+## 主从复制
+
+MySQL主从复制是一种将数据从主库复制到从库的技术,重要意义:
+
+- **读写分离**:主库处理写操作,从库处理读操作,显著减轻主库负载
+- **高可用性**:若主库故障,从库可快速提升为新主库,确保系统持续可用
+- **数据备份**:从库作为主库的热备份,可用于灾难修复,降低数据丢失风险
+- **负载均衡**:通过将读请求分布到多个从库,降低单台服务器的IO压力,**提高整体性能**
+
+主要支持两种方法:基于二进制日志(Binlog)和基于GTID的复制
+
+### 基于Binlog的传统复制
+
+通过将主库的写操作记录到二进制日志(Binlog),从库定期从主库获取这些日志并应用到本地,从而使从库的数据和主库保持一致
+
+默认采用异步复制方式,即从库无需持续连接主库,可以在网络可用时同步数据.从库可以复制主库的全部数据库,特定数据库或特定表,灵活性较高
+
+首先需要确保从库服务器(Slave)可以远程访问到主库服务器(Master).
+
+主库配置:
+
+```
+sudo vim /etc/mysql/mysql.conf.d/mysqld.cnf
+
+# 需要同步的数据库
+binlog_do_db            = sqltest
+
+# 不用给Slave同步的数据库，一般是Mysql自带的数据库就不用给Slave同步了
+binlog-ignore-db=mysql
+binlog-ignore-db=information_schema
+binlog-ignore-db=performance_schema
+binlog-ignore-db=sys
+
+# id值,在主从中唯一
+server-id               = 1
+# 开启binlog
+log_bin                 = /var/log/mysql/mysql-bin.log
+```
+
+重启后测试:
+
+```
+sudo systemctl restart mysql
+
+# 进入mysql中查看,log_bin已开
+mysql> show variables like '%log_bin%';
++---------------------------------+--------------------------------+
+| Variable_name                   | Value                          |
++---------------------------------+--------------------------------+
+| log_bin                         | ON                             |
+| log_bin_basename                | /var/log/mysql/mysql-bin       |
+| log_bin_index                   | /var/log/mysql/mysql-bin.index |
+| log_bin_trust_function_creators | OFF                            |
+| log_bin_use_v1_row_events       | OFF                            |
+| sql_log_bin                     | ON                             |
++---------------------------------+--------------------------------+
+6 rows in set (0.01 sec)
+
+# 查看master状态,slave中需要File和Position的值
+mysql> show master status;
++------------------+----------+--------------+-------------------------------------------------+-------------------+
+| File             | Position | Binlog_Do_DB | Binlog_Ignore_DB                                | Executed_Gtid_Set |
++------------------+----------+--------------+-------------------------------------------------+-------------------+
+| mysql-bin.000001 |      157 | sqltest      | mysql,information_schema,performance_schema,sys |                   |
++------------------+----------+--------------+-------------------------------------------------+-------------------+
+1 row in set (0.00 sec)
+```
+
+创建一个用户用于同步
+
+```
+mysql> CREATE USER 'backup'@'%' IDENTIFIED BY '123456';
+# 授予 backup 用户对所有数据库和表的 FILE 权限。
+GRANT FILE ON *.* TO 'backup'@'%';
+# 允许用户在从服务器上复制,允许用户查看复制状态
+GRANT REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'backup'@'%';
+```
+
+Slave上创建用户和数据库
+
+```
+CREATE USER 'test'@'%' IDENTIFIED BY '123456';
+Query OK, 0 rows affected (0.03 sec)
+
+create database test default character set utf8mb4 collate utf8mb4_general_ci;
+
+grant all privileges on test.* to 'test'@'%';
+```
+
+编辑配置文件:
+
+```
+sudo vim /etc/mysql/mysql.conf.d/mysqld.cnf
+
+server-id               = 2
+
+sudo systemctl restart mysql
+
+mysql > change master to master_host='192.168.163.99',master_port=3306,master_user='backup',master_password='123456',master_log_file='mysql-bin.000001',master_log_pos=157; 
+
+# 检查状态:
+show slave status\G
+```
+
+
+
+
+
+
+
 ## 案例
 
 ### 插入十万条随机数据

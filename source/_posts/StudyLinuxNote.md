@@ -290,6 +290,52 @@ NUMA node0 CPU(s):     0-3
 Flags:                 fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss ht syscall nx pdpe1gb rdtscp lm constant_tsc arch_perfmon nopl xtopology tsc_reliable nonstop_tsc eagerfpu pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm invpcid_single ssbd ibrs ibpb stibp fsgsbase tsc_adjust bmi1 avx2 smep bmi2 invpcid xsaveopt arat md_clear spec_ctrl intel_stibp flush_l1d arch_capabilities
 `````
 
+`nproc`查看cpu核心数
+
+#### 文件描述符
+
+`ulimit -n`查看系统文件描述符限制
+
+文件描述符分为**用户级**(每个用户登录后占用的文件描述符总数)和**系统级**(所有用户打开文件描述符的总和)
+
+临时调整:
+
+````
+# 用户级
+sudo ulimit -n 65535
+
+# 系统级
+sudo sysctl -w fs.file-max=65535
+````
+
+永久调整:
+
+```
+# 用户级
+sudo vim /etc/security/limits.conf
+* hard nofile 65535
+* soft nofile 65535
+
+# 系统级
+sudo vim /etc/sysctl.conf
+fs.file-max=65535
+```
+
+> 下面是摘自kernel document中关于file-max和file-nr参数的说明
+>
+> ```bash
+> file-max & file-nr:
+> 
+> The kernel allocates file handles dynamically, but as yet it doesn't free them again.
+> 内核可以动态的分配文件句柄，但到目前为止是不会释放它们的
+> 
+> The value in file-max denotes the maximum number of file handles that the Linux kernel will allocate. When you get lots of error messages about running out of file handles, you might want to increase this limit.
+> file-max的值是linux内核可以分配的最大文件句柄数。如果你看到了很多关于打开文件数已经达到了最大值的错误信息，你可以试着增加该值的限制
+> 
+> Historically, the three values in file-nr denoted the number of allocated file handles, the number of allocated but unused file handles, and the maximum number of file handles. Linux 2.6 always reports 0 as the number of free file handles -- this is not an error, it just means that the number of allocated file handles exactly matches the number of used file handles.
+> 在kernel 2.6之前的版本中，file-nr 中的值由三部分组成，分别为：1.已经分配的文件句柄数，2.已经分配单没有使用的文件句柄数，3.最大文件句柄数。但在kernel 2.6版本中第二项的值总为0，这并不是一个错误，它实际上意味着已经分配的文件句柄无一浪费的都已经被使用了
+> ```
+
 ### 时间管理
 
 #### date
@@ -1540,6 +1586,25 @@ drwxrwxrwt  17 root root  440 Apr 23 02:09 tmp
 
 使用`lsattr`命令可以查看这种特殊属性
 
+#### 切换用户
+
+可以使用`su`命令切换用户,默认切换到root用户
+
+例如`su - root`(等效于`su -`),`su - newuser`
+
+> `su`和`su -`的区别:
+>
+> 
+
+可以使用`sudo -u`临时使用指定用户操作,例如
+
+```
+# 查看www-data用户是否有权限查看SSL证书
+sudo -u www-data cat /etc/nginx/ssl/nginx_cert.crt
+```
+
+
+
 ## 服务与任务
 
 ### 服务管理
@@ -1855,3 +1920,296 @@ pid是进程的唯一数字标识,用于管理进程
 ps aux | grep ping
 ```
 
+```
+1. /etc/passwd 这个文件有什么作用，记录的内容是什么
+文件保存了系统中用户的基本信息,可以用来查看系统中已添加的用户
+2. 如果我想获取上面文件的以:分隔的第一列内容，如何获取
+cat /etc/passwd | awk -F ':' '{print $1}'
+3. 如何使用AWK获取上面文件第3列内容，并进行排序
+cat /etc/passwd | awk -F ':' '{print $3}' | sort -n
+4. 如何查看系统版本和内核版本
+cat /etc/os-release 
+内核:uname -a
+5. 如何更改系统源为国内源
+vim /etc/apt/sources.list
+6. 如何更新系统中的软件包
+apt-get update
+apt-get upgrade
+7. 如何使用apt安装nginx
+apt-get install nginx
+8. Nginx默认使用的端口号是多少，安装后如何访问
+80,首先systemctl start nginx启动服务,然后访问IP:80
+9. apt安装的Nginx默认配置目录是什么
+/etc/nginx/
+10. 如何查看当前机器监听了哪些端口号
+netstat -tnulp
+11. 什么是回环地址，为什么要有回环地址
+回环地址127.0.0.1是保留的特殊IP地址,数据包不经过网卡,直接在操作系统内部流转
+12. 如何判断端口号是绑定到某个具体地址，还是所有地址
+netstat -tnulp | grep '端口'
+显示0.0.0.0:端口表明是所有地址
+13. 如何通过终端软件将本地文件上传到Linux中，又如何下载文件到本地
+使用scp命令
+scp ./test.txt root@ip:/var/
+scp root@ip:/var/test.txt ./
+14. 如何完全复制一个目录到指定路径
+cp -r
+15. /opt目录有什么作用
+/opt目录专门存放第三方独立软件
+16. 如何使用一条命令创建多级目录
+mkdir -p
+17. 什么是软链接什么是硬链接，区别是什么
+软连接是单独的文件,拥有不同的inode和block,block内容是指向被链接文件的位置信息
+硬连接是只创建另一个文件,包含指向相同的inode的链接
+18. 什么场景下使用软链接，什么场景下使用硬链接
+软连接可以管理不同版本文件,激活配置文件
+硬链接可以备份重要文件防止误删
+19. 创建一个软链接/opt/nginx，让其链接到nginx的配置目录
+ln -s /etc/nginx /opt/nginx
+20. 如何判断一个文件是链接文件还是普通文件
+ls -l
+```
+
+```
+1. /dev/zero和/dev/null 是什么
+/dev/zero是无限零字节流
+/dev/null是黑洞文件,会丢弃所有写入的数据
+2. 如何查看硬盘的分区，以及当前系统磁盘使用大小
+df -h
+3. 创建一块新硬盘，1G大小，挂载到/opt/mydir目录，并设置为开机启动挂载
+fdisk /dev/sda
+mkfs.ext4 /dev/sda2
+mount /dev/sda2 /opt/mydir
+vim /etc/fstab
+/dev/sda2	/opt/mydir	ext4	defaults	0 1
+4. 使用dd命令，在/opt/mydir目录中写入一个200M大小的文件
+dd if=/dev/zero of=./test.txt bs=1M count=200
+5. 如何查看当前系统内存使用大小
+free -h
+top
+6. 如何查看系统负载，系统负载为10，表示什么含义，是高还是低。
+uptime,top
+根据cpu核心数,大于核心数*0.7则比较高
+7. 系统负载与CPU使用率有什么关联
+都反映了系统资源压力,系统负载表示单位时间内可运行+不可中断的任务数
+8. 如何查看本机启动了哪些端口，如何使用telnet测试端口是否连通
+netstat -tnulp
+telnet IP port
+9. 什么是域名，什么是dns，什么是hosts
+域名是为了方便人类记忆的地址i,dns是将域名翻译为IP地址的协议
+hosts文件是操作系统本机报错的dns对照表
+10. 一个域名是如何进行解析的
+首先访问浏览器的缓存,查看本机的hosts文件,检查有无域名解析信息,若没有,则向本地DNS服务商获取,DNS服务商若无信息,则其会从根域名服务器到一级域名(.com)再到二级域名服务器等等逐级查询
+11. 如何设置使用的DNS地址
+编辑/etc/hosts文件
+12. dig与nslookup有什么区别，什么场景下使用
+快速检查时使用nslookup,dig可以调试复杂的dns问题
+13. 什么是三次握手和四次挥手，什么场景下使用
+TCP连接时进行三次握手,断开时进行四次挥手
+14. TCP与UDP有什么区别
+TCP面向连接提供可靠传输,UDP提供不可靠传输
+15. UDP会进行握手吗
+不会
+16. 什么服务默认使用UDP协议
+SMTP,NFS
+17. 视频通话会使用TCP还是UDP，文字消息呢？
+TDP,文字使用UCP
+18. 解释ps -aux所有字段的含义
+-a 显示所有终端机下执行的程序
+-u 以用户为主的格式显示
+-x 显示所有程序
+19. Linux中如何判断上一条命令是否执行成功
+使用 $? 检查退出状态码
+使用`&&`和`||`
+ls -a && echo 'success' || echo 'failed'
+20. 如何修改系统默认时区，并同步网络时间
+timedatectl set-timezone 时区名称(Asia/Shanghai)
+ntpdate ntp1.aliyun.com
+21. 如何使用curl访问页面
+curl ip
+22. 如何使用curl和wget来下载文件到本地。
+curl -O link
+wget -O filename link
+需要完成这些内容，整理相关笔记，发布到公开平台，B站、小红书或者头条朋友圈等。内容可以是文字也可以是截图，但是需要写明是 “佚名运维训练营-第X天” 的内容，将内容截图发布到这里
+```
+
+
+
+```
+1. 运行ping命令会产生一个进程，运行其他服务也会产生一个进程，那么在系统看来，这些进程有什么本质区别吗
+pid不同
+2. 线程与进程有什么区别
+进程是程序的独立执行实例,具有独立的内存空间
+线程是进程的执行单元,共享进程的资源
+3. 一个多进程服务结构会是，一个主进程下面多个子进程，还是多个并列进程
+一个主多个子进程
+4. 什么并行，什么是并发，他们的区别是什么
+并行是单个cpu上运行多个程序,并发是多个cpu同时处理多个任务
+5. Linux下的信号（Signal）是什么？如何发送信号给进程，给出具体命令。
+信号是一种进程间通信的机制
+本质上是一种异步通知机制,用于进程间通信或操作系统向进程发送事件通知
+例如使用kill -<信号名或编号> <进程PID>
+kill 123 给pid为123的进程发送15信号
+kill -9 123 给pid为123的进程发送9,要求立即终止
+6. 常用的信号有9和15，他们有什么区别。
+9 SIGKILL用于立即结束程序的运行
+15 SIGTREM是程序结束信号,与SIGKILL不同的是该信号可以被程序处理,通常要求程序自己正常退出
+7. 如何将服务放到后台运行，比如将ping命令放到后台运行
+后面跟一个&
+8. 学习byobu，进行窗口上下拆分，左右拆分，并能将其切换到后台运行，唤起到前台
+
+9. 如何设置一个脚本开机自动执行
+
+10. 如何设置定时任务，让脚本定时执行。并解释'* * * * *'这五个星号各自的含义
+使用cron,
+crontab -e编辑当前用户的定时任务
+* * * * *
+1 分钟 2 小时 3 日期 4 月份 5 周几
+11. 什么是环境变量，PATH这个环境变量的作用是什么
+环境变量是操作系统存储的动态键值对,用于配置程序运行时的行为
+PATH是指定可执行程序的搜索路径
+12. 如何在PATH中添加内容，并使其永久生效
+export PATH=$PATH:/usr/bin
+写入~/.bashrc
+13. crontab中的环境变量与平常的环境变量有什么不同
+cron任务运行时不会加载用户shell的环境变量,PATH仅限基本路径(/usr/bin:/bin)
+14. Linux系统中什么能够与硬件直接交互
+linux内核,驱动程序
+15. 应用程序是如何操作硬件的
+应用程序调用系统调用,内核通过驱动程序将用户层请求转换为硬件指令,硬件执行
+16. 什么是驱动，内核依赖驱动还是驱动依赖内核
+驱动依赖内核,必须针对特定内核版本编写驱动,内核也依赖驱动,没有驱动,内核无法管理硬件
+17. 不同的Linux系统， 使用的内核有什么区别，这些内核由谁进行维护
+各发行版使用不同内核版本,官方内核由社区维护
+18. 软件的版本号一般分为几位
+2-4位
+19. 将ping 127.0.0.1的制作为system服务，并设置为开机启动
+vim /etc/systemd/system/ping-test.service
+[Unit]
+Description=Continuous Ping to Localhost
+
+[Service]
+ExecStart=/bin/ping 127.0.0.1
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now ping-test
+20. 如何 启动、停止、重启、设置开机启动取消开机启动system服务
+systemctl start 
+systemctl stop 
+systemctl restart 
+systemctl enable
+systemctl disable
+21. 如何查看system服务的日志
+systemctl status service
+```
+
+8:
+
+```
+1. 什么是RAID，有几种类型，其原理是什么
+RAID是磁盘阵列,常用的有0,1,5,10四种
+RAID0串联所有硬盘,将多块硬盘合并为一块共同存储,速度快,容量大,但安全性低
+RAID1只能由两块磁盘组成,其中一块是备份磁盘,安全性高,容量只有一块硬盘
+RAID5最少由三块磁盘组成,最多允许损坏一块磁盘
+RAID10最少四块磁盘,先将四块磁盘分别组成两个RAID1再进行RAID0串联
+2. 什么是防火墙，Linux下有哪些防火墙
+防火墙是一种网络安全系统,监控和控制网络流量,保护系统免受未经授权的访问
+常见防火墙:
+iptables
+nftables
+firewalld
+UFW
+3. 如何清空iptables中的所有规则
+iptables -F
+iptables -X
+iptables -Z
+4. 添加一个规则，禁止所有地址访问服务器的80端口，测试是否生效
+iptables -A INPUT -p tcp --dport 80 -j DROP
+5. iptables规则是按顺序全部执行还是匹配到就结束
+匹配到就结束
+6. 如果要拒绝所有地址访问，但是允许指定的地址访问，那么拒绝的规则应该放在第几条
+最后一条
+7. 如何调整iptables规则的顺序
+首先保存iptables-save > rules.txt
+然后编辑文件修改顺序
+最后重载规则iptables-restore < rules.txt
+8. 如何单独删除某条iptables规则
+1. 指定规则内容iptables -D INPUT -p tcp --dport 80 -j DROP
+2. 指定规则序号
+	iptables -L INPUT --line-numbers
+	iptables -D INPUT 2
+9. 准备2台虚拟机，A和B，在A机器上生成密钥，并配置让A可以使用密钥免密登录到B机器
+ssh-keygen -t rsa
+ssh-copy-id username@B_IP
+10. 如何从A机器上复制一个文件或目录到B机器
+scp ./txt user@B_IP:/mnt/
+scp -r /root user@B_IP:/mnt/
+11. 如何使用sync同步A机器上的目录到B机器
+rsync -avz ./ user@IP:/root/
+12. 如何设置同步时，保持目录一致，比如A机器原始目录中删除了文件同时也会删除B机器同步目录中的对应文件
+使用--delete参数进行无差异同步:
+rsync -avz --delete /opt/backup 172.16.1.7:/opt/backup
+13. 如何设置同步时，A机器原始目录中删除文件，但是B机器同步目录中会保留文件
+rsync -avz ./ user@IP:/root/
+14. 每隔几秒创建一个以当前时间命名的文件，比如20250623110833.txt
+while true; do touch $(date +%Y%m%d%H%M%S).txt; sleep 5; done
+15. 将一个目录打包，生成一个以当前时间命名的压缩包，比如将/etc目录打包为etc_20250623110833.tgz
+tar -czvf etc_`date +%Y%m%d%H%M%S`.tgz /etc/
+16. 如何查看进程的当前工作目录
+pwdx PID
+17. 如何查看某个端口被哪个进程占用
+lsof -i :port
+netstat -tnulp | grep :port
+18. 如何查看某个文件被哪个进程占用
+lsof /test.txt
+19. lsof有哪些功能
+列出打开的文件及相关进程
+网络连接,文件目录占用,用户活动文件,进程打开的文件描述符
+20. /proc目录有什么作用
+虚拟文件系统,提供内核和进程的实时信息
+21. apt如何卸载软件包，如何查找软件包，如何安装指定版本的软件包，如何锁定软件包版本（不会自动升级）
+apt remove package
+apt search package
+apt install package=version
+apt-mark hold package
+```
+
+10
+
+```
+通过之前的作业，你已经掌握了Linux的大部分基础。今天留的任务都是综合性的问题，需要自行思考如何解决，期间可能有之前没有讲过的命令或者方法，试着解决吧。
+1. 研发人员反馈配置文件经常丢失
+公司某研发人员反馈，某些配置文件经常被“莫名其妙”删掉，怀疑是其他人误操作。你作为运维，需要排查是谁删除的，并确保以后再发生也能及时追踪。
+2. 某台服务器性能突然变差
+某线上服务所在服务器这两天经常“卡顿”，有时网页打不开，但硬件资源并未升级。你被安排分析问题。
+3. 给研发提供服务器但不能暴露所有权限
+研发要登录服务器调试服务，但你又担心他们动到系统配置、误删文件或查看敏感目录。你需要在保障研发效率的同时限制权限。
+4. 你刚接管一台旧服务器，什么都不知道
+公司交给你一台旧机器，只知道之前跑过某些服务，要求你“搞清楚这台机器在干嘛、能不能下线”。
+5. 运维服务器定期空间不足
+运维服务器最近磁盘空间频繁报警，/opt 经常满，但开发说“我啥也没动”。你要排查出根因并提出解决方案。
+6. 某文件被加密，怀疑中病毒
+你收到告警：一台 Linux 服务器 /home 目录中多个文件被加密，文件名被改为 .locked 结尾，研发打不开文件。怀疑被入侵。
+7. 被要求记录谁登录服务器做了什么
+安全部门要求你记录：谁什么时候登录了服务器、做了什么操作，并保留日志30天。你要设计方案并验证。
+8. 模拟企业级备份与恢复流程
+某重要系统数据每天要备份，并保留7天。现在要求你搭建一套“自动备份 + 过期删除 + 可恢复验证”的机制。
+9. 公司新入职员工频繁问服务器怎么登录
+公司有多台服务器，新入职员工每次都来问“我要登录哪台主机，账号密码是什么？”。 安全管理员希望你建立一套规范化、自动化的主机登录体系，避免口头传密码，也方便集中管理。
+10. 某用户误删系统目录，如何快速定位和修复
+一位用户执行 rm -rf 时误删了系统关键目录，系统报错但未宕机。你被叫来“定位是删了哪里，是否可恢复”。
+11. 主机入侵应急响应
+你怀疑一台服务器被黑客入侵了，目前还没宕机，但流量异常，进程诡异。你要如何应急响应。
+12. 某服务内存持续升高，如何监控预警
+有个服务运行几小时后内存不断升高，有内存泄漏嫌疑。你需要设置自动化监控和告警，避免服务拖垮系统。
+13. 本地开发环境需要定期重置
+研发测试环境经常被“测坏”，需要每天凌晨自动回滚到干净状态（重新部署配置、服务、数据等）。
+```
+
+## 参考
+
+https://www.coonote.com/linux-note/linux-modifying-maximum-file-descriptor.html

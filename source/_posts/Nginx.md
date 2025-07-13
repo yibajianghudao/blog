@@ -1742,7 +1742,62 @@ upstream load_pass {
 
 
 
+# 题目
 
+### Nginx如何支持百万并发
+
+1. 增加work进程数,与cpu核心数量匹配
+
+   - nginx的work进程负责处理请求,每个进程绑定一个cpu核心
+   - 在`/etc/nginx/nginx.conf`中设置`worker_processes`,例如`worker_processes auto;`或`worker_processes 8;`,可以使用`nproc`命令查看cpu核心数
+
+2. 调整`work_connections`以支持更多连接
+
+   - `work_connections`定义每个work进程的最大连接数,总并发数为`work_connections * worker_processes`,需要和**文件描述符**上限匹配
+   - 在配置文件中:`work_connections 4096;`
+
+3. 优化操作系统限制,如提高文件操作符上限
+
+   - 每个连接需要一个文件描述符,Linux默认限制较低
+   - 在nginx配置文件中:`worker_rlimit_nofile 65535;`
+
+4. 调整TCP设置,例如启用TCP Fast Open或增大缓冲区
+
+   - TCP Fast Open通过减少三次握手延迟提高连续效率,增大缓冲区可以优化数据传输
+
+   - ```
+     # TFO
+     tcp_fastopen 32;
+     # 增大缓冲区
+     client_body_buffer_size 128k;
+     client_header_buffer_size 3m;
+     large_client_header_buffers 4 256k;
+     ```
+
+5. 启用`HTTP/2`,支持多路复用,提高效率`http2_enable on;`
+
+6. 使用`keepalive`连接,重用连接,减少建立开销`keepalive_timeout 65;`,`keepalive_requests 10000;`
+
+7. 后端进行缓存,例如Memcached或Redis,缓存静态内容,减轻Nginx负载.
+
+8. 确保硬件资源重组(使用top或htop监控资源)
+
+9. 部署更多实例或集群并部署负载均衡
+
+   - 示例配置:
+     ```
+     upstream backend {
+         server 192.168.1.100:80;
+         server 192.168.1.101:80;
+         server 192.168.1.102:80;
+     }
+     server {
+         listen 80;
+         location / {
+             proxy_pass [invalid url, do not cite]
+         }
+     }
+     ```
 
 
 
