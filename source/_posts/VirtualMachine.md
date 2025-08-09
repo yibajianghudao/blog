@@ -291,3 +291,15 @@ deb-src http://mirrors.aliyun.com/ubuntu/ jammy-backports main restricted univer
 
 ```
 
+pip ustc源
+
+```
+# 临时
+pip install -i https://mirrors.ustc.edu.cn/pypi/simple package
+
+# 默认
+pip install -i https://mirrors.ustc.edu.cn/pypi/simple pip -U
+pip config set global.index-url https://mirrors.ustc.edu.cn/pypi/simple
+
+```
+

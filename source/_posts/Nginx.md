@@ -6,33 +6,24 @@ tags:
 
 
 
-# Nginx
+# Nginx 笔记
 
-Nginx是一个开源,高性能,可靠的Http Web服务,代理服务.
+## 引言
 
-Nginx非常轻量,功能模块少,代码模块化,静态资源处理较快
+Nginx 是一个高性能的 Web 服务器和反向代理服务器，以其高效和低资源占用著称。
+
+主要用途包括:Web服务器,反向代理,负载均衡
+
+还可用于邮件代理,HTTP缓存,SSL/TLS终止
 
 ![img](Nginx/5e3ba1cc0392485e0c000002.png)
 
 nginx 本身就是一个反向代理服务器
 
 > 反向代理:
-> **反向代理**（**Reverse proxy**）在是代理服务器的一种。服务器根据[客户端](https://zh.wikipedia.org/wiki/客户端)的请求，从其关系的一组或多组后端[服务器](https://zh.wikipedia.org/wiki/服务器)（如[Web服务器](https://zh.wikipedia.org/wiki/Web服务器)）上获取资源，然后再将这些资源返回给客户端，客户端只会得知反向代理的IP地址，而不知道在代理服务器后面的服务器集群的存在.
->
-> 反向代理的主要作用为：
->
-> - 对客户端隐藏服务器（集群）的IP地址
-> - 负载均衡:若服务器集群中有负荷较高者，反向代理通过[URL重写](https://zh.wikipedia.org/wiki/URL重寫)，根据连线请求从负荷较低者获取与所需相同的资源或备援
-> - 缓存:对于静态内容及短时间内有大量访问请求的动态内容提供[缓存服务](https://zh.wikipedia.org/wiki/Web缓存)
-> - 压缩:对一些内容进行[压缩](https://zh.wikipedia.org/wiki/資料壓縮)，以节约[带宽](https://zh.wikipedia.org/wiki/頻寬)或为网络带宽不佳的网络提供服务
-> - 外网发布:为在私有网络下（如[局域网](https://zh.wikipedia.org/wiki/區域網路)）的服务器集群提供[NAT穿透](https://zh.wikipedia.org/wiki/NAT穿透)及外网发布服务
-> - 提供HTTP访问认证
+> **反向代理**（**Reverse proxy**）在是代理服务器的一种。服务器根据[客户端](https://zh.wikipedia.org/wiki/客户端)的请求，从其关系的一组或多组后端[服务器](https://zh.wikipedia.org/wiki/服务器)（如[Web服务器](https://zh.wikipedia.org/wiki/Web服务器)）上获取资源，然后再将这些资源返回给客户端，对客户端隐藏服务端细节,提高安全性
 
 ## 安装
-
-1. 编译并安装
-2. 从epel仓库安装
-3. 从nginx官方仓库安装
 
 ### 从nginx仓库安装
 
@@ -88,6 +79,26 @@ yum -y install nginx
 [root@nfs ~]#vim /etc/nginx/nginx.conf 
 user  www;
 ```
+
+### 运行
+
+配置完成之后可以使用`nginx -t`测试配置文件是否语法正确:
+
+```bash
+nginx -t
+nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+```
+
+然后可以选择两种启动方式:
+
+1. 使用systemd管理:
+   `systemctl start/restart nginx`
+2. 不使用systemd管理:
+   启动:`/usr/sbin/nginx`
+   停止:`/usr/sbin/nginx -s stop`
+   重新读取配置:`/usr/sbin/nginx -s reload`
+   重启:`/usr/sbin/nginx -s stop && /usr/sbin/nginx`
 
 ## 配置
 
@@ -210,8 +221,6 @@ HTTP区块
     server区块
     	location区块
 ```
-
-
 
 ### 配置多业务
 
@@ -503,24 +512,122 @@ tcp        0      0 0.0.0.0:81              0.0.0.0:*               LISTEN      
 
 server_name也可以不设置(`_`),这样默认也是locahost.
 
-## 运行
+### 指定位置
 
-配置完成之后可以使用`nginx -t`测试配置文件是否语法正确:
-```bash
-nginx -t
-nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
-nginx: configuration file /etc/nginx/nginx.conf test is successful
+location指定存储位置有两个方式:`root`和`alias`
+
+对于同样的配置:
+
+```
+location /download {
+	root /package;
+	autoindex on;
+ }
 ```
 
-然后可以选择两种启动方式:
+1. root实际访问的路径是`/package/download`
+2. alisa实际访问的路径是`package`
 
-1. 使用systemd管理:
-   `systemctl start/restart nginx`
-2. 不使用systemd管理:
-   启动:`/usr/sbin/nginx`
-   停止:`/usr/sbin/nginx -s stop`
-   重新读取配置:`/usr/sbin/nginx -s reload`
-   重启:`/usr/sbin/nginx -s stop && /usr/sbin/nginx`
+> 使用alisa时路径末尾必须封闭,例如`alias /code/chess/err/`,否则匹配文件时会匹配不到
+>
+> 而root则可以`root /code/chess`不封闭,不影响拼接路径
+
+### 匹配规则
+
+location后可以跟匹配符:
+
+| 匹配符 | 匹配规则                    | 优先级 |
+| ------ | --------------------------- | ------ |
+| =      | 精确匹配                    | 1      |
+| ^~     | 以某个字符开头              | 2      |
+| ~      | 区分大小写的正则匹配        | 3      |
+| ~*     | 不区分大小写的正则匹配      | 4      |
+| /      | 通用匹配,任何请求都会匹配到 | 5      |
+
+通过一个`test.conf`来测试:
+
+```
+server {
+    listen 82;
+    server_name _;
+    default_type text/html;
+    location = / {
+    	# 相当于:
+    	# root /code/test;
+    	# index index.html;
+    	# echo "configuration A" > /code/test/index.html
+    	# 这样写可以快速的返回数据,需要在server区块下配置`default_type`
+        return 200 "configuration A";
+    }
+    location / {
+        return 200 "configuration B";
+    }
+    location /documents/ {
+        return 200 "configuration C";
+    }
+    location ^~ /images/ {
+        return 200 "configuration D";
+    }
+    location ~* \.(gif|jpg|jpeg)$ {
+        return 200 "configuration E";
+    }
+}
+```
+
+测试结果:
+
+```
+[root@nfs conf.d]#curl 10.0.0.7:82
+configuration A
+
+[root@nfs conf.d]#curl 10.0.0.7:82/index.html
+configuration B
+
+[root@nfs conf.d]#curl 10.0.0.7:82/documents/1.doc
+configuration C
+
+[root@nfs conf.d]#curl 10.0.0.7:82/documents/1.jpg
+configuration E
+
+[root@nfs conf.d]#curl 10.0.0.7:82/images/111.gif
+configuration D
+
+[root@nfs conf.d]#curl 10.0.0.7:82/111.gif
+configuration E
+```
+
+常用的location匹配:
+
+```
+# 通用匹配，任何请求都会匹配到
+location / {
+    ...
+}
+
+# 严格区分大小写，匹配以.php结尾的都走这个location    
+location ~ \.php$ {
+    ...
+}
+
+# 严格区分大小写，匹配以.jsp结尾的都走这个location 
+location ~ \.jsp$ {
+    ...
+}
+
+# 不区分大小写匹配，只要用户访问.jpg,gif,png,js,css 都走这条location
+location ~* .*\.(jpg|gif|png|js|css)$ {
+    ...
+}
+
+location ~* \.(jpg|gif|png|js|css)$ {
+    ...
+}
+
+# 不区分大小写匹配
+location ~* "\.(sql|bak|tgz|tar.gz|.git)$" {
+    ...
+}
+```
 
 ## 模块
 
@@ -985,128 +1092,7 @@ server{
 }
 ```
 
-## 规则
-
-### location指定位置
-
-location指定存储位置有两个方式:`root`和`alias`
-
-对于同样的配置:
-
-```
-location /download {
-	root /package;
-	autoindex on;
- }
-```
-
-1. root实际访问的路径是`/package/download`
-2. alisa实际访问的路径是`package`
-
-> 使用alisa时路径末尾必须封闭,例如`alias /code/chess/err/`,否则匹配文件时会匹配不到
->
-> 而root则可以`root /code/chess`不封闭,不影响拼接路径
-
-### location匹配规则
-
-location后可以跟匹配符:
-
-| 匹配符 | 匹配规则                    | 优先级 |
-| ------ | --------------------------- | ------ |
-| =      | 精确匹配                    | 1      |
-| ^~     | 以某个字符开头              | 2      |
-| ~      | 区分大小写的正则匹配        | 3      |
-| ~*     | 不区分大小写的正则匹配      | 4      |
-| /      | 通用匹配,任何请求都会匹配到 | 5      |
-
-通过一个`test.conf`来测试:
-
-```
-server {
-    listen 82;
-    server_name _;
-    default_type text/html;
-    location = / {
-    	# 相当于:
-    	# root /code/test;
-    	# index index.html;
-    	# echo "configuration A" > /code/test/index.html
-    	# 这样写可以快速的返回数据,需要在server区块下配置`default_type`
-        return 200 "configuration A";
-    }
-    location / {
-        return 200 "configuration B";
-    }
-    location /documents/ {
-        return 200 "configuration C";
-    }
-    location ^~ /images/ {
-        return 200 "configuration D";
-    }
-    location ~* \.(gif|jpg|jpeg)$ {
-        return 200 "configuration E";
-    }
-}
-```
-
-测试结果:
-
-```
-[root@nfs conf.d]#curl 10.0.0.7:82
-configuration A
-
-[root@nfs conf.d]#curl 10.0.0.7:82/index.html
-configuration B
-
-[root@nfs conf.d]#curl 10.0.0.7:82/documents/1.doc
-configuration C
-
-[root@nfs conf.d]#curl 10.0.0.7:82/documents/1.jpg
-configuration E
-
-[root@nfs conf.d]#curl 10.0.0.7:82/images/111.gif
-configuration D
-
-[root@nfs conf.d]#curl 10.0.0.7:82/111.gif
-configuration E
-```
-
-常用的location匹配:
-
-```
-# 通用匹配，任何请求都会匹配到
-location / {
-    ...
-}
-
-# 严格区分大小写，匹配以.php结尾的都走这个location    
-location ~ \.php$ {
-    ...
-}
-
-# 严格区分大小写，匹配以.jsp结尾的都走这个location 
-location ~ \.jsp$ {
-    ...
-}
-
-# 不区分大小写匹配，只要用户访问.jpg,gif,png,js,css 都走这条location
-location ~* .*\.(jpg|gif|png|js|css)$ {
-    ...
-}
-
-location ~* \.(jpg|gif|png|js|css)$ {
-    ...
-}
-
-# 不区分大小写匹配
-location ~* "\.(sql|bak|tgz|tar.gz|.git)$" {
-    ...
-}
-```
-
-
-
-## 错误
+## 故障排查
 
 ### error文件的定位
 
@@ -1169,7 +1155,13 @@ upload_max_filesize = 20M
 max_file_uploads = 20
 ```
 
-# 反向代理
+## 反向代理
+
+反向代理是指 Nginx 位于客户端和后端服务器之间，接收客户端的请求并转发给后端服务器，然后将服务器的响应返回给客户端。这常用于
+
+- **负载均衡**：将请求分发到多个后端服务器，提升系统吞吐率。
+- **SSL 终止**：处理 HTTPS 流量，减轻后端服务器的加密解密负担。
+- **缓存**：缓存常用内容，减少后端服务器负载。
 
 在没有代理模式的情况下，客户端和`Nginx`服务端，都是客户端直接请求服务端，服务端直接响应客户端。
 
@@ -1188,135 +1180,47 @@ max_file_uploads = 20
    反向代理，用于公司集群架构中，为服务端服务,客户端->代理<—>服务端
    ![img](Nginx/5e435acb2556957b61000005.png)
 
-Nginx作为代理服务，可支持的代理协议非常的多:
+### 模块
 
-![img](Nginx/5e435adc2556957b61000006.png)
+Nginx 支持多种协议的反向代理，包括 HTTP、WebSocket、HTTPS、FastCGI、uWSGI 和 gRPC。这些功能由以下模块支持：
 
-![img](Nginx/5e435aee2556957b61000007.png)
+- ngx_http_proxy_module：处理 HTTP/HTTPS/WebSocket。
+- ngx_http_fastcgi_module：支持 FastCGI 协议。
+- ngx_http_uwsgi_module：支持 uWSGI 协议。
+- ngx_http_v2_module：支持 gRPC（基于 HTTP/2）。
 
-## 模块
+### 配置
 
-*反向代理模式与Nginx代理模块总结如表格所示*
+反向代理配置:
 
-| **反向代理模式**       | **Nginx\****配置模块**  |
-| ---------------------- | ----------------------- |
-| http、websocket、https | ngx_http_proxy_module   |
-| fastcgi                | ngx_http_fastcgi_module |
-| uwsgi                  | ngx_http_uwsgi_module   |
-| grpc                   | ngx_http_v2_module      |
+- 使用 `proxy_pass` 指定后端服务器，例如 `proxy_pass [invalid url, do not cite]`
+- 通过 `proxy_set_header` 传递客户端 IP 和请求头，如 `proxy_set_header X-Real-IP $remote_addr;`。
+- 设置超时时间，如 `proxy_connect_timeout 30;`（连接超时）、`proxy_read_timeout 60;`（读取响应超时））、`proxy_send_timeout`（发送数据到后端的最大允许时间）
+- 启用缓冲区优化，如 `proxy_buffering on;`(启用响应缓存)和 `proxy_buffer_size 32k;`(保存请求头信息的缓冲区大小)和`proxy_buffers`(保存请求内容的缓冲区数量和大小)。
 
-## 语法
-
-代理配置语法
-
-### url跳转修改返回location
-
-```
-Syntax:    proxy_pass URL;
-Default:    —
-Context:    location, if in location, limit_except
-
-http://localhost:8000/uri/
-http://192.168.56.11:8000/uri/
-http://unix:/tmp/backend.socket:/uri/
-```
-
-### `url`跳转修改返回`Location`[不常用]
-
-```
-Syntax:    proxy_redirect default;
-proxy_redirect off;proxy_redirect redirect replacement;
-Default:    proxy_redirect default;
-Context:    http, server, location
-```
-
-### 添加发往后端服务器的请求头信息
-
-```
-Syntax:    proxy_set_header field value;
-Default:    proxy_set_header Host $proxy_host;
-            proxy_set_header Connection close;
-Context:    http, server, location
-
-# 用户请求的时候HOST的值是www.oldboy.com, 那么代理服务会像后端传递请求的还是www.oldboy.com
-proxy_set_header Host $http_host;
-# 将$remote_addr的值放进变量X-Real-IP中，$remote_addr的值为客户端的ip
-proxy_set_header X-Real-IP $remote_addr;
-# 客户端通过代理服务访问后端服务, 后端服务通过该变量会记录真实客户端地址
-proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-```
-
-### 代理到后端的TCP连接、响应、返回等超时时间
-
-```
-//nginx代理与后端服务器连接超时时间(代理连接超时)
-Syntax: proxy_connect_timeout time;
-Default: proxy_connect_timeout 60s;
-Context: http, server, location
-
-//nginx代理等待后端服务器的响应时间
-Syntax:    proxy_read_timeout time;
-Default:    proxy_read_timeout 60s;
-Context:    http, server, location
-
-//后端服务器数据回传给nginx代理超时时间
-Syntax: proxy_send_timeout time;
-Default: proxy_send_timeout 60s;
-Context: http, server, location
-```
-
-### proxy_buffer代理缓冲区
-
-```
-//nignx会把后端返回的内容先放到缓冲区当中，然后再返回给客户端,边收边传, 不是全部接收完再传给客户端
-Syntax: proxy_buffering on | off;
-Default: proxy_buffering on;
-Context: http, server, location
-
-//设置nginx代理保存用户头信息的缓冲区大小
-Syntax: proxy_buffer_size size;
-Default: proxy_buffer_size 4k|8k;
-Context: http, server, location
-
-//proxy_buffers 缓冲区
-Syntax: proxy_buffers number size;
-Default: proxy_buffers 8 4k|8k;
-Context: http, server, location
-```
-
-### 常用优化配置
-
-Proxy代理网站常用优化配置如下，将配置写入新文件，调用时使用include引用即可
-
-```
-[root@Nginx ~]# vim /etc/nginx/proxy_params
-proxy_set_header Host $http_host;
-proxy_set_header X-Real-IP $remote_addr;
-proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-
-proxy_connect_timeout 30;
-proxy_send_timeout 60;
-proxy_read_timeout 60;
-
-proxy_buffering on;
-proxy_buffer_size 32k;
-proxy_buffers 4 128k;
-```
-
-### 重复使用配置
-
-*代理配置location时调用方便后续多个Location重复使用*
+一个示例配置如下:
 
 ```
 location / {
-    proxy_pass http://127.0.0.1:8080;
-    include proxy_params;
+    proxy_pass [invalid url, do not cite]
+    
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+    proxy_connect_timeout 30;
+    proxy_send_timeout 60;
+    proxy_read_timeout 60;
+
+    proxy_buffering on;
+    proxy_buffer_size 32k;
+    proxy_buffers 4 128k;
 }
 ```
 
-## 配置
+### 示例
 
-### 转发至web01静态页面
+#### 转发至web01静态页面
 
 在web01上配置静态页面:
 
@@ -1335,14 +1239,7 @@ server{
 [root@web01 ~]#echo "web01 static page" > /code/static/index.html
 ```
 
-安装nignx:
-
-```
-scp -rp root@172.16.1.7:/etc/yum.repos.d/* /etc/yum.repos.d/
-yum -y install nginx
-```
-
-配置反向代理:
+在代理服务器上配置反向代理:
 
 ```
 [root@db1 ~]#vim /etc/nginx/conf.d/default.conf 
@@ -1404,7 +1301,7 @@ server{
 }
 ```
 
-该配置文件也监听172.16.1.7(web01的ip),但是lb服务器在转发的时候没有配置请求头,可以通过抓包工具查看:
+该配置文件也监听172.16.1.7(web01的ip),这是由于lb服务器在转发的时候没有配置请求头,可以通过抓包工具查看:
 
 ![image-20250616114421521](Nginx/image-20250616114421521.png)
 
@@ -1488,10 +1385,10 @@ log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
 
 #### 缓冲区
 
-开启proxy_buffer后,nginx会将后端返回的内容先放到缓冲区中然后再返回给客户端,变收变传,而不是全部接收后再传递给客户端
+开启proxy_buffer后,nginx会将后端返回的内容先放到缓冲区中然后再返回给客户端,边收边传,而不是全部接收后再传递给客户端
 
-1. proxy_buffer_size size,保存请求头的缓冲区大小
-2. proxy_buffers number size,保存请求内容,number指缓冲区数量,size是每个缓冲区的大小,一般size指定为4k或8k即可
+1. `proxy_buffer_size size`,保存请求头的缓冲区大小
+2. `proxy_buffers number size`,保存请求内容,number指缓冲区数量,size是每个缓冲区的大小,一般size指定为4k或8k即可
 
 最终配置如下:
 ```
@@ -1500,28 +1397,25 @@ server {
         server_name www.static.com;
 
         location / {
-        proxy_pass http://10.0.0.7;
-        proxy_set_header Host $http_host;
-        proxy_http_version 1.1;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_pass http://10.0.0.7;
+            proxy_set_header Host $http_host;
+            proxy_http_version 1.1;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 
-        proxy_connect_timeout 30;
-        proxy_send_timeout 60;
-        proxy_read_timeout 60;
+            proxy_connect_timeout 30;
+            proxy_send_timeout 60;
+            proxy_read_timeout 60;
 
-        proxy_buffering on;
-        proxy_buffer_size 32k;
-        proxy_buffers 4 128k;
-                                                                 }
+            proxy_buffering on;
+            proxy_buffer_size 32k;
+            proxy_buffers 4 128k;
+                                                                 
+         }
           
 }
 ```
 
-
-
-
-
-## 限制
+### 限制
 
 单台服务器运行服务端时,多个客户端使用不同的端口访问相同的服务端端口,服务端只需要一个端口就可以使用:
 
@@ -1533,29 +1427,19 @@ server {
 
 因此可能会出现端口不够用的情况,此时可以用四层代理解决
 
-# 负载均衡(load balance)
+## 负载均衡
 
-
-
-当**Web**服务器直接面向用户，往往要承载大量并发请求，单台服务器难以负荷，使用多台**Web**服务器组成集群，前端使用`Nginx`负载均衡，将请求分散的打到后端服务器集群中，实现负载的分发。会大大提升系统的吞吐率、请求性能、高容灾
+负载均衡通过将请求分发到多个后端服务器，减轻单台服务器的压力，提高系统的吞吐率和容错能力。Nginx 使用 upstream 模块定义服务器组，并通过 proxy_pass 将请求转发到该组。用户提到，Nginx 负载均衡与普通代理的区别在于，普通代理仅转发到一台服务器，而负载均衡转发到一组服务器。
 
 ![img](Nginx/5e43d6452556957b6100000a-1750079571433-2.png)
 
-往往我们接触的最多的是`SLB(Server Load Balance)`服务器负载均衡，实现最多的也是`SLB`、那么`SLB`它的调度节点和服务节点通常是在一个地域里面。那么它在这个小的逻辑地域里面决定了他对部分服务的实时性、响应性是非常好的。
+>  负载均衡分为四层负载和七层负载:
+>
+> - **四层负载均衡**：基于传输层（TCP/UDP），数据包在底层分发，性能高但功能有限，不识别 HTTP 协议。
+> - **七层负载均衡**：基于应用层（HTTP），支持 URL 匹配、头部改写、会话保持等高级功能，适合 Web 应用。
+> - **Nginx 特点**：Nginx 主要用于七层负载均衡，但也可以通过 stream 模块支持四层负载均衡（TCP/UDP），但在 HTTP 场景中更常见于七层。
 
-所以说当海量用户请求过来以后，它同样是请求调度节点，调度节点将用户的请求转发给后端对应的服务节点，服务节点处理完请求后在转发给调度节点，调度节点最后响应给用户节点。这样也能实现一个均衡的作用，那么**Nginx**则是一个典型的`SLB`
-
-负载均衡分为四层负载和七层负载:
-
-四层负载均衡数据包在底层就进行了分发，而七层负载均衡数据包则是在最顶层进行分发、由此可以看出，七层负载均衡效率没有四负载均衡高。
-
-但七层负载均衡更贴近于服务，如:**http**协议就是七层协议，我们可以用**Nginx**可以作会话保持，**URL**路径规则匹配、**head**头改写等等，这些是四层负载均衡无法实现的。
-
-> 四层负载均衡不识别域名，七层负载均衡识别域名
-
-## 七层负载
-
-七层负载均衡是在应用层，那么它可以完成很多应用方面的协议请求，比如我们说的**http**应用的负载均衡，它可以实现**http**信息的改写、头信息的改写、安全应用规则控制、**URL**匹配规则控制、以及转发、**rewrite**等等的规则，所以在应用层的服务里面，我们可以做的内容就更多，Nginx则是一个典型的七层负载均衡`SLB`
+Nginx是一个典型的**七层负载均衡**`SLB`
 
 Nginx要实现负载均衡需要用到`proxy_pass`代理模块配置.前面我们使用该代理模块将静态请求代理到了web01.
 
@@ -1732,19 +1616,118 @@ upstream load_pass {
 }
 ```
 
+## 题目
 
+### Nginx是什么?
 
+nginx是一款开源的高性能Web服务器,同时也广泛用作反向代理和负载均衡器,它的核心优势是事件驱动的异步架构,能以极低资源消耗处理海量并发连接.
 
+主要用途包括:
 
-## 四层负载
+1. 托管静态资源,响应速度极快
+2. 作为反向代理,将请求转发到后端服务器,对客户端隐藏具体细节
+3. 实现负载均衡,通过算法分发流量到多台服务器,提升系统吞吐量
+4. 提供HTTP缓存,加速内容访问并减轻后端压力
+5. SSL卸载,将客户端的HTTPS请求解密/加密后用HTTP与后端通信,减轻后端压力
 
-所谓四层负载均衡指的是`OSI`七层模型中的传输层，那么传输层**Nginx**已经能支持**TCP/IP**的控制，所以只需要对客户端的请求进行**TCP/IP**协议的包转发就可以实现负载均衡，那么它的好处是性能非常快、只需要底层进行应用处理，而不需要进行一些复杂的逻辑。
+还可用于访问控制,邮件代理等场景
 
+### Nginx如何作为反向代理工作？
 
+Nginx位于客户端和服务器之间,客户端发送请求,Nginx接收后转发给适当的后端服务器,后端服务器响应后,Nginx将结果返回给客户端.
 
+好处:
 
+- 提升性能:缓存常用的内容,高效处理静态文件
+- 提高安全性:营隐藏后端服务器的细节,减少攻击面
+- 负载均衡:分发请求到多个服务器
+- SSL终止:处理加密解密,减轻后端服务器负担
 
+配置指令:
 
+- `proxy_pass`:指定后端服务器的URL
+- `proxy_set_header`:修改发送到后端服务器的请求头
+- `proxy_buffering`,`proxy_buffers`,`proxy_buffer_size`:配置响应缓冲
+
+### Nginx如何配置负载均衡
+
+在Nginx中使用`upstream`块定义后端服务器组,然后通过`proxy_pass`将请求转发到该组
+
+负载均衡的调度方法:
+
+- 轮询:均匀的分发请求到所有服务器
+- 加权轮询:weight值越大,分配到的访问几率越高
+- 最少连接:将请求发送到活动连接最少的服务器
+- IP哈希:来自同一IP的请求始终发送到同一服务器
+
+### Nginx常见模块和用途
+
+- `ngx_http_proxy_module`:反向代理,转发请求
+- `ngx_http_ssl_module`:支持SSL/TLS,确保安全
+- `ngx_http_upstream_module`:负载均衡,定义服务器组
+- `ngx_http_core_module`:核心HTTP功能
+- `ngx_http_fastcgi_module`:代理到FastCGI服务器
+
+### Nginx如何支持百万并发
+
+1. 增加work进程数,与cpu核心数量匹配
+
+   - nginx的work进程负责处理请求,每个进程绑定一个cpu核心
+   - 在`/etc/nginx/nginx.conf`中设置`worker_processes`,例如`worker_processes auto;`或`worker_processes 8;`,可以使用`nproc`命令查看cpu核心数
+
+2. 调整`work_connections`以支持更多连接
+
+   - `work_connections`定义每个work进程的最大连接数,总并发数为`work_connections * worker_processes`,需要和**文件描述符**上限匹配
+   - 在配置文件中:`work_connections 4096;`
+
+3. 优化操作系统限制,如提高文件操作符上限
+
+   - 每个连接需要一个文件描述符,Linux默认限制较低
+   - 在nginx配置文件中:`worker_rlimit_nofile 65535;`
+
+4. 调整TCP设置,例如启用TCP Fast Open或增大缓冲区
+
+   - TCP Fast Open通过减少三次握手延迟提高连续效率,增大缓冲区可以优化数据传输
+
+   - ```
+     # TFO
+     tcp_fastopen 32;
+     # 增大缓冲区
+     client_body_buffer_size 128k;
+     client_header_buffer_size 3m;
+     large_client_header_buffers 4 256k;
+     ```
+
+5. 启用`HTTP/2`,支持多路复用,提高效率`http2_enable on;`
+
+6. 使用`keepalive`连接,重用连接,减少建立开销`keepalive_timeout 65;`,`keepalive_requests 10000;`
+
+7. 后端进行缓存,例如Memcached或Redis,缓存静态内容,减轻Nginx负载.
+
+8. 确保硬件资源重组(使用top或htop监控资源)
+
+9. 部署更多实例或集群并部署负载均衡
+
+   - 示例配置:
+     ```
+     upstream backend {
+         server 192.168.1.100:80;
+         server 192.168.1.101:80;
+         server 192.168.1.102:80;
+     }
+     server {
+         listen 80;
+         location / {
+             proxy_pass [invalid url, do not cite]
+         }
+     }
+     ```
+
+# 高级特性
+
+## 流量分析
+
+https://www.v2ex.com/t/1149876
 
 # 其他
 
