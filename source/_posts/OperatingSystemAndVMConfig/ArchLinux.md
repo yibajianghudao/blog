@@ -1,11 +1,6 @@
 ---
-title: ArchLinuxNote
+title: ArchLinux使用笔记
 date: 2025-04-17 02:51:30
-tags:
-    - archlinux
-    - note
-categories:
-   - note
 description: 我的ArchLinux使用笔记
 
 ---
@@ -180,8 +175,6 @@ mkinitcpio -p linux		#或者直接mkinitcpio -P
 1. 在`GRUB_CMDLINE_LINUX_DEFAULT=`后面加上`nvidia_drm.modeset=1`
 1. 终端运行：`sudo grub-mkconfig -o /boot/grub/grub.cfg`
    重启后问题解决。
-
-
 
 ## VMware
 

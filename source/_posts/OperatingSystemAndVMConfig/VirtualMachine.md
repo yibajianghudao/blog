@@ -1,7 +1,8 @@
 ---
-title: VirtualMachine
+title: 虚拟机
 date: 2025-06-18 10:26:29
 tags:
+description: 虚拟机配置与使用
 ---
 
 # 虚拟机
