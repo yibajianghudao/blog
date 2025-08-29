@@ -48,9 +48,11 @@ virtualbox的Host-only模式需要在Network tools中新建网络:
 
 ![image-20250614130932509](VirtualMachine/image-20250614130932509.png)
 
-## 修改网络配置
+## 系统初始化
 
 ### centos 7
+
+#### 修改网络配置
 
 添加一个新的网卡用于内网
 
@@ -111,6 +113,8 @@ ip add
 ```
 
 ### ubuntu 22.04
+
+#### 修改网络配置
 
 从vmnet8迁移到vmnet9
 
@@ -249,6 +253,176 @@ ip address
 > netplan apply
 > ```
 
+### Rockey9.3
+
+#### 修改网络配置
+
+编辑`vim /etc/NetworkManager/system-connections/`目录下的网卡文件,例如:
+
+```
+vim /etc/NetworkManager/system-connections/enp0s3.nmconnection
+
+[connection]
+id=enp0s3
+uuid=28c68dfd-ae72-3558-919e-cfd826efd9f7
+type=ethernet
+autoconnect-priority=-999
+interface-name=enp0s3
+
+[ethernet]
+
+[ipv4]
+method=manual
+address1=192.168.1.10/24,192.168.1.200
+dns=114.114.114.114;8.8.8.8
+
+[ipv6]
+addr-gen-mode=eui64
+method=auto
+
+[proxy]
+```
+
+在`address1`中设置IP地址,以逗号分隔后添加默认网关,dns服务器以分号分隔
+
+可以在`[connection]`中设置`autoconnect=false`禁用掉网卡的自动挂载
+
+#### 修改防火墙为`iptables`
+
+默认防火墙是`firewalld`
+
+```
+systemctl disable --now firewalld
+
+yum -y install iptables-services
+systemctl start iptables
+iptables -F
+systemctl enable iptables
+```
+
+#### 禁用 Selinux
+
+```
+setenforce 0
+sed -i "s/SELINUX=enforcing/SELINUX=disabled/g" /etc/selinux/config
+grubby --update-kernel ALL --args selinux=0
+```
+
+#### 设置时区
+
+```
+timedatectl set-timezone Asia/Shanghai
+```
+
+#### 安装docker环境
+
+```
+# 加载 bridge
+yum install -y epel-release
+yum install -y bridge-utils
+modprobe br_netfilter
+echo 'br_netfilter' >> /etc/modules-load.d/bridge.conf
+echo 'net.bridge.bridge-nf-call-iptables=1' >> /etc/sysctl.conf
+echo 'net.bridge.bridge-nf-call-ip6tables=1' >> /etc/sysctl.conf
+echo 'net.ipv4.ip_forward=1' >> /etc/sysctl.conf
+sysctl -p
+
+
+# 添加 docker-ce yum 源
+# 中科大(ustc)
+sudo dnf config-manager --add-repo https://mirrors.ustc.edu.cn/docker-
+ce/linux/centos/docker-ce.repo
+cd /etc/yum.repos.d
+# 切换中科大源
+sed -e 's|download.docker.com|mirrors.ustc.edu.cn/docker-ce|g' docker-ce.repo
+# 安装 docker-ce
+yum -y install docker-ce
+# 配置 daemon.
+cat > /etc/docker/daemon.json <<EOF
+{
+  "default-ipc-mode": "shareable",
+  "data-root": "/data/docker",
+  "exec-opts": ["native.cgroupdriver=systemd"],
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "100m",
+    "max-file": "100"
+  },
+  "registry-mirrors": [
+  "https://reg-mirror.qiniu.com/",
+  "https://docker.mirrors.ustc.edu.cn/",
+  "https://hub-mirror.c.163.com/",
+  "https://docker.1ms.run",
+  "https://hub.mirrorify.net",
+  "https://young-sky.nooa.tech/"
+  ]
+}
+EOF
+mkdir -p /etc/systemd/system/docker.service.d
+# 重启docker服务
+systemctl daemon-reload && systemctl restart docker && systemctl enable docker
+```
+
+#### 关闭swap分区
+
+首先查看当前交换分区信息:
+
+```
+free
+               total        used        free      shared  buff/cache   available
+Mem:         3734992      353804     3352368        8728      250468     3381188
+Swap:        4194300           0     4194300
+```
+
+然后:
+
+```
+# 临时关闭
+swapoff -a
+
+# 查看
+free
+               total        used        free      shared  buff/cache   available
+Mem:         3734992      354420     3352652        8728      249584     3380572
+Swap:              0           0           0
+```
+
+永久关闭只需要在`/etc/fstab`中将swap分区的字段挂载注释掉:
+
+```
+cat /etc/fstab
+
+/dev/mapper/rl_vbox-root /                       xfs     defaults        0 0
+UUID=1ecce10c-37fa-4549-8af2-57c47a765c33 /boot                   xfs     defaults        0 0
+/dev/mapper/rl_vbox-swap none                    swap    defaults        0 0
+
+
+# 在交换分区前添加注释即可
+sed -i "s:/dev/mapper/rl_vbox-swap:#/dev/mapper/rl_vbox-swap:g" /etc/fstab
+```
+
+#### 修改主机名
+
+```
+hostnamcel set-hostname k8s-master01
+```
+
+然后可以修改`/etc/hosts`文件:
+
+```
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+
+192.168.1.10 k8s-master01 m1
+192.168.1.11 k8s-node01 n1
+192.168.1.12 k8s-node02 n2
+192.168.1.13 harbor
+```
+
+
+
+
+
 ## 克隆
 
 1. 完全克隆(full clone)
@@ -301,5 +475,165 @@ pip install -i https://mirrors.ustc.edu.cn/pypi/simple package
 # 默认
 pip install -i https://mirrors.ustc.edu.cn/pypi/simple pip -U
 pip config set global.index-url https://mirrors.ustc.edu.cn/pypi/simple
+```
+
+## 问题
+
+### 同一Host-only网络下一个可以ping通一个ping不通
+
+安装`ikuai`软路由时遇到,它和其他虚拟机(rockey9)处于同一`host-only`网段下
+
+ikuai的IP:192.168.1.2
+
+同一网段下的虚拟机: 192.168.1.10
 
 ```
+# 可以看到是ping不通的
+ping 192.168.1.2
+ping 192.168.1.2 PING 192.168.1.2 (192.168.1.2) 56(84) bytes of data. From 192.168.1.0 icmp_seq=1 Destination Host Unreachable From 192.168.1.0 icmp_seq=2 Destination Host Unreachable From 192.168.1.0 icmp_seq=3 Destination Host Unreachable
+
+# 虚拟机可以ping通
+ping 192.168.1.10
+PING 192.168.1.10 (192.168.1.10) 56(84) bytes of data.
+64 bytes from 192.168.1.10: icmp_seq=1 ttl=64 time=0.570 ms
+64 bytes from 192.168.1.10: icmp_seq=2 ttl=64 time=0.306 ms
+64 bytes from 192.168.1.10: icmp_seq=3 ttl=64 time=0.354 ms
+^C
+--- 192.168.1.10 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2053ms
+rtt min/avg/max/mdev = 0.306/0.410/0.570/0.114 ms
+```
+
+而在虚拟机里ping`ikuai`和在`ikuai`中ping虚拟机都是可以ping通的
+
+检查后发现是我的vboxnet2(虚拟机使用的host-only网卡)网卡的设置有问题,他被设置的是:
+
+```
+sudo VBoxManage list hostonlyifs
+
+Name:            vboxnet2
+GUID:            f0000000-daea-4abf-8000-0a0027000002
+DHCP:            Disabled
+IPAddress:       192.168.1.0
+NetworkMask:     255.255.255.0
+IPV6Address:     fe80::800:27ff:fe00:2
+IPV6NetworkMaskPrefixLength: 64
+HardwareAddress: 0a:00:27:00:00:02
+MediumType:      Ethernet
+Wireless:        No
+Status:          Up
+VBoxNetworkName: HostInterfaceNetworking-vboxnet2
+
+ip addr show dev vboxnet2
+
+6: vboxnet2: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+    link/ether 0a:00:27:00:00:02 brd ff:ff:ff:ff:ff:ff
+    altname enx0a0027000002
+    inet 192.168.1.0/24 brd 192.168.1.255 scope global vboxnet2
+       valid_lft forever preferred_lft forever
+    inet6 fe80::800:27ff:fe00:2/64 scope link proto kernel_ll 
+       valid_lft forever preferred_lft forever
+```
+
+可以看到网络IP设置的是`192.168.1.0`,而对于不同的虚拟机,可能会对该不规范的源地址作出不同的动作:丢弃或接受
+
+只需要修改vboxnet2的接口配置即可
+
+但virtualbox的网段配置似乎不能生效,我尝试:
+
+```
+sudo VBoxManage hostonlyif ipconfig vboxnet2 --ip 192.168.1.1 --netmask 255.255.255.0
+```
+
+在查看配置时发现已经修改了:
+
+```
+sudo VBoxManage list hostonlyifs
+
+Name:            vboxnet2
+GUID:            f0000000-daea-4abf-8000-0a0027000002
+DHCP:            Disabled
+IPAddress:       192.168.1.1
+NetworkMask:     255.255.255.0
+IPV6Address:     fe80::800:27ff:fe00:2
+IPV6NetworkMaskPrefixLength: 64
+HardwareAddress: 0a:00:27:00:00:02
+MediumType:      Ethernet
+Wireless:        No
+Status:          Up
+VBoxNetworkName: HostInterfaceNetworking-vboxnet2
+```
+
+但是重启宿主机并启动两个虚拟机之后,发现vboxnet2网卡的配置依旧是`192.168.1.0/24`:
+
+```
+ip addr show dev vboxnet2
+
+6: vboxnet2: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+    link/ether 0a:00:27:00:00:02 brd ff:ff:ff:ff:ff:ff
+    altname enx0a0027000002
+    inet 192.168.1.0/24 brd 192.168.1.255 scope global vboxnet2
+       valid_lft forever preferred_lft forever
+    inet6 fe80::800:27ff:fe00:2/64 scope link proto kernel_ll 
+       valid_lft forever preferred_lft forever
+```
+
+并且以及保持原来的错误,无法ping通`192.168.1.2`
+
+然后发现virtualbox的配置文件中依旧写的是`192.168.1.0`:
+
+```
+vim .config/VirtualBox/VirtualBox.xml  
+
+      <ExtraDataItem name="HostOnly/vboxnet2/IPAddress" value="192.168.1.0"/>
+      <ExtraDataItem name="HostOnly/vboxnet2/IPNetMask" value="255.255.255.0"/>
+```
+
+并且virtualbox的vboxnet2网卡在宿主机刚启动的时候没有具体的IP地址:
+
+```
+ip addr show dev vboxnet2
+
+6: vboxnet2: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+    link/ether 0a:00:27:00:00:02 brd ff:ff:ff:ff:ff:ff
+    altname enx0a0027000002
+```
+
+即使手动添加上:
+
+```
+# 删除 vboxnet2 的内核地址
+sudo ip addr flush dev vboxnet2
+# 添加新IP
+sudo ip addr add 192.168.1.1/24 dev vboxnet2
+```
+
+在启动虚拟机后还会再次添加`192.168.1.0`(此时ip addr的结果显示的是两个inet)并且问题依旧
+
+修改完该配置文件后恢复正常:
+
+```
+vim .config/VirtualBox/VirtualBox.xml  
+
+      <ExtraDataItem name="HostOnly/vboxnet2/IPAddress" value="192.168.1.1"/>
+      <ExtraDataItem name="HostOnly/vboxnet2/IPNetMask" value="255.255.255.0"/>
+```
+
+```
+ip addr show dev vboxnet2                                             
+
+6: vboxnet2: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+    link/ether 0a:00:27:00:00:02 brd ff:ff:ff:ff:ff:ff
+    altname enx0a0027000002
+    inet 192.168.1.1/24 brd 192.168.1.255 scope global vboxnet2
+       valid_lft forever preferred_lft forever
+    inet6 fe80::800:27ff:fe00:2/64 scope link proto kernel_ll 
+       valid_lft forever preferred_lft forever
+```
+
+并且问题得到解决
+
+
+
+
+

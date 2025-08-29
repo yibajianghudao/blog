@@ -839,7 +839,9 @@ tmpfs                    199M     0  199M   0% /run/user/0
 /dev/sdb1               1014M 1014M  736K 100% /var/testlog
 ```
 
+### 安全管理
 
+防火墙常用的软件是`filewall`和`iptables`
 
 ## 文件与存储
 
@@ -1950,6 +1952,13 @@ systemctl get-default
 ```bash
 systemctl set-default graphical.target
 ```
+
+## 日志管理
+
+如果一个服务无法启动,可以使用下面的命令来查看日志
+
+- `systemctl status daemon.service`
+- `journalctl -u daemon.service -xe`
 
 ## 软件管理
 

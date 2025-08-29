@@ -290,6 +290,272 @@ BGP模式是非封装模式,避免了封装和解封的资源浪费,但是需要
 - 优点：不用封包解包，通过 BGP 协议可实现 pod 网络在主机间的三层可达
 - 缺点：跨网段时，配置较为复杂网络要求较高，主机网关路由也需要充当 BGP Speaker。
 
+## 安装
+
+k8s的安装通常有两种方式:
+
+- 使用`kubeadm`安装,它会将组件通过容器化方式运行
+  - 优势: 简单,可以自愈
+  - 缺点: 掩盖一些启动细节
+- 使用二进制文件安装,组件以系统进程的方式运行
+  - 优势: 能够更灵活的安装集群,可以具有更大规模(将apiserver scheduler等组件单独安装在一台机器中)
+  - 缺点: 配置比较复杂
+
+### 使用Kubeadm搭建一个一主两从的集群
+
+基础网络结构
+
+![网络结构](kubernetes/网络结构.png)
+
+性能要求:
+
+- 主节点: 
+  - CPU>=2
+  - MEM>=4GB
+  - NIC(网卡)>=1
+  - DISK=100GB(需要大量镜像)
+- 从节点:
+  - CPU>=1
+  - MEM>=1GB
+  - NIC(网卡)>=1
+  - DISK=100GB
+
+#### 前提条件
+
+关闭交换分区
+
+```
+sed -i "s:/dev/mapper/rl_vbox-swap:#/dev/mapper/rl_vbox-swap:g" /etc/fstab
+```
+
+修改主机名
+
+```
+hostnamectl set-hostname k8s-master01
+```
+
+| IP           | 主机名       |
+| ------------ | ------------ |
+| 192.168.1.10 | k8s-master01 |
+| 192.168.1.11 | k8s-node01   |
+| 192.168.1.12 | k8s-node02   |
+
+修改hosts文件
+
+```
+vim /etc/hosts
+
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+
+# IP地址 完整主机名 简短别名
+192.168.1.10 k8s-master01 m1
+192.168.1.11 k8s-node01 n1
+192.168.1.12 k8s-node02 n2
+192.168.1.13 harbor
+```
+
+> harbor是将来可能用到的镜像服务器
+
+修改后将文件发送给其他两个服务器:
+
+```
+scp /etc/hosts root@n1:/etc/hosts
+scp /etc/hosts root@n2:/etc/hosts
+```
+
+安装docker环境
+
+```
+# 加载 bridge
+yum install -y epel-release
+yum install -y bridge-utils
+modprobe br_netfilter
+echo 'br_netfilter' >> /etc/modules-load.d/bridge.conf
+echo 'net.bridge.bridge-nf-call-iptables=1' >> /etc/sysctl.conf
+echo 'net.bridge.bridge-nf-call-ip6tables=1' >> /etc/sysctl.conf
+echo 'net.ipv4.ip_forward=1' >> /etc/sysctl.conf
+sysctl -p
+
+# 添加 docker-ce yum 源
+# 中科大(ustc)
+sudo dnf config-manager --add-repo https://mirrors.ustc.edu.cn/docker-
+ce/linux/centos/docker-ce.repo
+cd /etc/yum.repos.d
+# 切换中科大源
+sed -e 's|download.docker.com|mirrors.ustc.edu.cn/docker-ce|g' docker-ce.repo
+# 安装 docker-ce
+yum -y install docker-ce
+# 配置 daemon.
+cat > /etc/docker/daemon.json <<EOF
+{
+  "default-ipc-mode": "shareable",
+  "data-root": "/data/docker",
+  "exec-opts": ["native.cgroupdriver=systemd"],
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "100m",
+    "max-file": "100"
+  }
+  "registry-mirrors": [
+  "https://reg-mirror.qiniu.com/",
+  "https://docker.mirrors.ustc.edu.cn/",
+  "https://hub-mirror.c.163.com/",
+  "https://docker.1ms.run",
+  "https://hub.mirrorify.net",
+  "https://young-sky.nooa.tech/"
+  ]
+}
+
+EOF
+mkdir -p /etc/systemd/system/docker.service.d
+# 重启docker服务
+systemctl daemon-reload && systemctl restart docker && systemctl enable docker
+```
+
+安装`cri-docker`
+
+docker使用`OCRI`接口,而其他容器运行时使用`CRI`接口,早期的k8s使用一个垫片将`CRI`转换为`OCRI`,现在k8s已不在维护,而是由`cri-docker`项目维护
+
+```
+wget https://github.com/Mirantis/cri-dockerd/releases/download/v0.3.17/cri-dockerd-0.3.17.amd64.tgz
+
+tar -zxf cri-dockerd-0.3.17.amd64.tgz
+
+mv cri-dockerd/cri-dockerd /usr/bin/
+
+chmod a+x /usr/bin/cri-dockerd
+```
+
+编写systemd文件
+
+```
+cat <<"EOF" > /usr/lib/systemd/system/cri-docker.service
+[Unit]
+Description=CRI Interface for Docker Application Container Engine
+Documentation=https://docs.mirantis.com
+After=network-online.target firewalld.service docker.service
+Wants=network-online.target
+Requires=cri-docker.socket
+[Service]
+Type=notify
+ExecStart=/usr/bin/cri-dockerd --network-plugin=cni --pod-infra-container-image=registry.aliyuncs.com/google_containers/pause:3.8
+ExecReload=/bin/kill -s HUP $MAINPID
+TimeoutSec=0
+RestartSec=2
+Restart=always
+StartLimitBurst=3
+StartLimitInterval=60s
+LimitNOFILE=infinity
+LimitNPROC=infinity
+LimitCORE=infinity
+TasksMax=infinity
+Delegate=yes
+KillMode=process
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# 添加cri-docker套接字
+cat <<"EOF" > /usr/lib/systemd/system/cri-docker.socket
+[Unit]
+Description=CRI Docker Socket for the API
+PartOf=cri-docker.service
+[Socket]
+ListenStream=%t/cri-dockerd.sock
+SocketMode=0660
+SocketUser=root
+SocketGroup=docker
+[Install]
+WantedBy=sockets.target
+EOF
+
+systemctl daemon-reload && systemctl enable --now cri-docker
+```
+
+
+
+随后重启一下虚拟机
+
+#### 安装[ikuai](https://www.ikuai8.com/component/download)
+
+下载iso后新建一个虚拟机并安装
+
+![image-20250825000219177](kubernetes/image-20250825000219177.png)
+
+设置lan地址:
+
+![image-20250825001136731](kubernetes/image-20250825001136731.png)
+
+配置后按q锁定,然后访问`192.168.1.200`
+
+![image-20250825030257872](kubernetes/image-20250825030257872.png)登录(admin/admin)后在网络设置-内外网设置中点击wan1修改外网地址
+
+![image-20250825031606294](kubernetes/image-20250825031606294.png)
+
+选择NAT网卡绑定即可
+
+#### 配置k8s机器使用软路由
+
+此时的虚拟机中有两张网卡:
+
+```
+[root@vbox ~]# ip addr show
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host 
+       valid_lft forever preferred_lft forever
+2: enp0s3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+    link/ether 08:00:27:fa:a9:7a brd ff:ff:ff:ff:ff:ff
+    inet 192.168.1.10/24 brd 192.168.1.255 scope global noprefixroute enp0s3
+       valid_lft forever preferred_lft forever
+    inet6 fe80::a00:27ff:fefa:a97a/64 scope link noprefixroute 
+       valid_lft forever preferred_lft forever
+3: enp0s8: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+    link/ether 08:00:27:5d:55:cc brd ff:ff:ff:ff:ff:ff
+    inet 10.0.3.15/24 brd 10.0.3.255 scope global dynamic noprefixroute enp0s8
+       valid_lft 86241sec preferred_lft 86241sec
+    inet6 fd17:625c:f037:3:a00:27ff:fe5d:55cc/64 scope global dynamic noprefixroute 
+       valid_lft 86245sec preferred_lft 14245sec
+    inet6 fe80::a00:27ff:fe5d:55cc/64 scope link noprefixroute 
+       valid_lft forever preferred_lft forever
+```
+
+我们先将enp0s8(NAT 网络)网卡禁用掉,防止出现节点中从一个机器的一个网卡到另一个的不在同一网段的网卡请求的乌龙事件
+
+```
+vim /etc/NetworkManager/system-connections/enp0s8.nmconnection
+
+[connection]
+id=enp0s8
+uuid=a852fe6e-1b80-3d2a-856c-523098ed69a0
+type=ethernet
+# 添加禁用网卡自启
+autoconnect=false
+autoconnect-priority=-999
+interface-name=enp0s8
+timestamp=1755897461
+```
+
+然后将enp0s3(host-only网络)网卡的默认网关设置为ikuai虚拟机,并设置dns服务器:
+
+```
+vim /etc/NetworkManager/system-connections/enp0s3.nmconnection
+
+[ipv4]
+method=manual
+# 逗号后跟网关
+address1=192.168.1.12/24,192.168.1.200
+# dns服务器以分号间隔
+dns=114.114.114.114;8.8.8.8
+```
+
+随后在ikuai的web页面中的 状态监控-终端监控-IPv4中可以看到
+
+![image-20250825210631937](kubernetes/image-20250825210631937.png)
+
 ## 创建集群(minikube)
 
 minikube能够快速搭建本地 Kubernetes 集群
