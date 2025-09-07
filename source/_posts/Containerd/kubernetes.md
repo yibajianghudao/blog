@@ -556,6 +556,147 @@ dns=114.114.114.114;8.8.8.8
 
 ![image-20250825210631937](kubernetes/image-20250825210631937.png)
 
+#### 安装kubenetes
+
+以下命令对于所有机器：
+
+配置源
+
+```
+cat <<EOF | sudo tee /etc/yum.repos.d/kubernetes.repo
+[kubernetes]
+name=Kubernetes
+baseurl=https://pkgs.k8s.io/core:/stable:/v1.29/rpm/
+enabled=1
+gpgcheck=1
+gpgkey=https://pkgs.k8s.io/core:/stable:/v1.29/rpm/repodata/repomd.xml.key
+EOF
+```
+
+由于没有网络，此处使用本地的软件包进行安装，安装列表：
+
+```
+ls
+conntrack-tools-1.4.7-2.el9.x86_64.rpm
+cri-tools-1.29.0-150500.1.1.x86_64.rpm
+kubeadm-1.29.2-150500.1.1.x86_64.rpm
+kubectl-1.29.2-150500.1.1.x86_64.rpm
+kubelet-1.29.2-150500.1.1.x86_64.rpm
+kubernetes-cni-1.3.0-150500.1.1.x86_64.rpm
+libnetfilter_cthelper-1.0.0-22.el9.x86_64.rpm
+libnetfilter_cttimeout-1.0.0-19.el9.x86_64.rpm
+libnetfilter_queue-1.0.5-1.el9.x86_64.rpm
+socat-1.7.4.1-5.el9.x86_64.rpm
+```
+
+安装：
+
+```
+# 关闭仓库安装本地文件
+dnf install -y ./* --disablerepo="*"
+```
+
+配置kubelet开机自启
+
+```
+systemctl enable kubelet
+```
+
+> kubelet 是维护 Pod 生命周期和节点状态的关键组件，因此它是以守护进程的方式安装并开机自启的
+>
+> linux > docker > cri-docker > kubelet > Api Server > Controller manager / Scheduler / etcd
+
+进行主节点的初始化
+
+```
+# 配置了apiserver地址,service 网络范围, pod网络范围,跳过前置的错误检测,指定cri的接口地址
+kubeadm init \
+  --apiserver-advertise-address=192.168.1.10 \
+  --kubernetes-version 1.29.2 \
+  --service-cidr=10.10.0.0/12 \
+  --pod-network-cidr=10.244.0.0/16 \
+  --cri-socket unix:///var/run/cri-dockerd.sock
+```
+
+```
+# 复制配置
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+```
+
+可以在子节点中使用下面的命令来加入集群:
+
+```
+# token和ca-cert-hash是在运行上面的初始化命令后提示的
+kubeadm join 192.168.1.10:6443 --token iwszwi.471dirm0fr4aj5qi \
+        --discovery-token-ca-cert-hash sha256:0a34459764a301b9f7809a6dc84443cbc3d0923f6ea502af1b38ff8bda320c47 --cri-socket unix:///var/run/cri-dockerd.sock
+```
+
+在主节点可以看到所有node:
+
+```
+kubectl get nodes
+NAME           STATUS     ROLES           AGE     VERSION
+k8s-master01   NotReady   control-plane   5m23s   v1.29.2
+k8s-node01     NotReady   <none>          17s     v1.29.2
+k8s-node02     NotReady   <none>          11s     v1.29.2
+```
+
+由于现在k8s的所有容器没有工作在一个扁平的网络空间中,因此还需要部署网络插件,程可以参考这篇[文章](https://docs.tigera.io/calico/latest/getting-started/kubernetes/self-managed-onprem/onpremises#install-calico-with-kubernetes-api-datastore-more-than-50-nodes)
+
+calico有两种安装方法,Operator和Manifest
+
+Manifest直接使用官方提供的一份或多份 **YAML 清单文件 (Kubernetes manifest)**，里面包含了 Calico 所需的所有资源（Deployment、DaemonSet、ConfigMap、CRD 等）。可以直接使用`kubectl apply -f calico.yaml`安装,但修改参数需要手动编辑YAML文件
+
+Operator使用一个控制器(Calico Operator)来管理Calico的安装和生命周期
+
+> 对于Manifest安装方法,如果使用 *Kubernetes API datastore* 且 **超过 50 个节点**，则需要通过 Typha daemon 来实现扩展。
+
+```
+curl https://raw.githubusercontent.com/projectcalico/calico/v3.26.3/manifests/calico-typha.yaml -o calico.yaml
+
+# 修改配置文件
+vim calico.yaml 
+# 修改为 BGP 模式
+# Enable IPIP
+- name: CALICO_IPV4POOL_IPIP
+  value: "Always"  #改成Off
+# 修改为与初始化时的pod-network-cidr参数一致
+- name: CALICO_IPV4POOL_CIDR
+  value: "10.244.0.0/16"
+# 指定网卡
+- name: IP_AUTODETECTION_METHOD
+  value: "interface=enp0s3"
+
+# 使用该配置文件
+kubectl apply -f calico.yaml
+```
+
+等待几分钟后查看pod状态：
+
+```
+kubectl get pod -A
+NAMESPACE     NAME                                       READY   STATUS    RESTARTS      AGE
+kube-system   calico-kube-controllers-558d465845-2rm2r   1/1     Running   0             2m3s
+kube-system   calico-node-4f6xb                          1/1     Running   0             2m3s
+kube-system   calico-node-65vpx                          1/1     Running   0             2m3s
+kube-system   calico-node-sld8x                          1/1     Running   0             2m3s
+kube-system   calico-typha-5b56944f9b-tvsx8              1/1     Running   0             2m3s
+kube-system   coredns-76f75df574-dmp2g                   1/1     Running   3 (28m ago)   176m
+kube-system   coredns-76f75df574-llcrd                   1/1     Running   3 (28m ago)   176m
+kube-system   etcd-k8s-master01                          1/1     Running   3 (28m ago)   177m
+kube-system   kube-apiserver-k8s-master01                1/1     Running   3 (28m ago)   177m
+kube-system   kube-controller-manager-k8s-master01       1/1     Running   3 (28m ago)   177m
+kube-system   kube-proxy-8c7s4                           1/1     Running   0             171m
+kube-system   kube-proxy-kv2cv                           1/1     Running   0             171m
+kube-system   kube-proxy-pcgr8                           1/1     Running   3 (28m ago)   176m
+kube-system   kube-scheduler-k8s-master01                1/1     Running   3 (28m ago)   177m
+```
+
+> 此处由于pause:3.8镜像源遇到问题导致卡了很久，最后使用docker的镜像站手动安装才成功：
+> docker pull **.xuanyuan.run/pause:3.8
+
 ## 创建集群(minikube)
 
 minikube能够快速搭建本地 Kubernetes 集群

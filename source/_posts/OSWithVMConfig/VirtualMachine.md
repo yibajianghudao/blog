@@ -112,6 +112,61 @@ ip add
        valid_lft forever preferred_lft forever
 ```
 
+#### 开放root登录
+
+编辑`/etc/ssh/sshd_config`文件,取消下面两行的注释
+
+```
+PermitRootLogin yes
+PasswordAuthentication yes
+```
+
+#### 更换阿里云yum源
+
+```
+# 备份
+sudo mkdir -p /etc/yum.repos.d/backup
+sudo mv /etc/yum.repos.d/CentOS-*.repo /etc/yum.repos.d/backup/
+
+# 基础源
+sudo curl -o /etc/yum.repos.d/CentOS-Base.repo https://mirrors.aliyun.com/repo/Centos-7.repo
+# EPEL扩展源
+sudo curl -o /etc/yum.repos.d/epel.repo https://mirrors.aliyun.com/repo/epel-7.repo
+
+
+sudo yum clean all        # 清理旧缓存
+sudo yum makecache fast   # 生成新缓存
+
+# 验证是否生效
+sudo yum repolist
+```
+
+#### 关闭selinux
+
+临时关闭
+
+```
+# 切换为 Permissive（警告模式，不拦截）
+sudo setenforce 0
+
+# 验证
+getenforce
+# 输出: Permissive
+```
+
+永久关闭
+
+```
+sudo vim /etc/selinux/config
+
+# 把enforcing改成disabled
+SELINUX=disabled
+
+sudo reboot
+```
+
+> 修改为permissive可以允许但保留日志
+
 ### ubuntu 22.04
 
 #### 修改网络配置
