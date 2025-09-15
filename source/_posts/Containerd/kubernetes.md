@@ -47,33 +47,33 @@ k8s的微观架构:
 
 Control Plane组件:
 
-| 组件               | 说明                                                         |
-| ------------------ | ------------------------------------------------------------ |
-| api server         | k8s集群的中枢和统一入口，负责接收所有请求，进行认证、鉴权和准入控制，并将结果持久化到 etcd。同时，它也是各个控制组件之间通信的桥梁，确保集群状态与期望状态一致。 |
+| 组件                 | 说明                                                                                          |
+| ------------------ | ------------------------------------------------------------------------------------------- |
+| api server         | k8s集群的中枢和统一入口，负责接收所有请求，进行认证、鉴权和准入控制，并将结果持久化到 etcd。同时，它也是各个控制组件之间通信的桥梁，确保集群状态与期望状态一致。        |
 | etcd               | 一致且高可用的键值对数据库，用作存储Kubernetes 集群所有状态数据。  <br />*最少3个etcd可以组成etcd class集群,任意一个节点损坏,不会导致信息的丢失* |
-| scheduler          | 调度器,绑定需要运行的容器和节点之间的关系,负责监视新创建的、未指定运行node的Pods,并选择节点来让 Pod 在上面运行 |
-| controller manager | 控制器,负责运行控制器进程,确保集群状态符合预期,例如进行损坏容器的重新创建 |
+| scheduler          | 调度器,绑定需要运行的容器和节点之间的关系,负责监视新创建的、未指定运行node的Pods,并选择节点来让 Pod 在上面运行                             |
+| controller manager | 控制器,负责运行控制器进程,确保集群状态符合预期,例如进行损坏容器的重新创建                                                      |
 
 Node组件:
 
-| 组件       | 说明                                                         |
-| ---------- | ------------------------------------------------------------ |
+| 组件         | 说明                                                  |
+| ---------- | --------------------------------------------------- |
 | kubelet    | 监听api server发送的配置,并通过接口调用容器运行时管理容器,报告 Node 和 Pod 状态 |
-| kube proxy | 提供服务发现和负载均衡,管理集群内部网络通信                  |
+| kube proxy | 提供服务发现和负载均衡,管理集群内部网络通信                              |
 
 扩展组件:
 
 组件组成k8s的核心功能,除此之外还有核心扩展和可选扩展
 
-| 核心扩展                       | 说明                                                    |
-| ------------------------------ | ------------------------------------------------------- |
-| 容器运行时 (Container runtime) | 负责管理 Kubernetes 环境中容器的执行和生命周期          |
-| CoreDNS                        | 提供私有的域名解析服务,网络内部除了IP还可以使用域名访问 |
-| Ingress Controller             | 提供七层(应用层)的负载均衡                              |
+| 核心扩展                      | 说明                            |
+| ------------------------- | ----------------------------- |
+| 容器运行时 (Container runtime) | 负责管理 Kubernetes 环境中容器的执行和生命周期 |
+| CoreDNS                   | 提供私有的域名解析服务,网络内部除了IP还可以使用域名访问 |
+| Ingress Controller        | 提供七层(应用层)的负载均衡                |
 
-| 可选扩展   | 说明                    |
-| ---------- | ----------------------- |
-| prometheus | 监控资源                |
+| 可选扩展       | 说明            |
+| ---------- | ------------- |
+| prometheus | 监控资源          |
 | Dashboard  | 通过web界面进行集群管理 |
 | Fedetation | 提供多k8s集群的管理能力 |
 
@@ -93,9 +93,60 @@ Pod是对一个或多个容器的**逻辑分组**,是k8s中部署的最小单位
 同一个Pod中,其他容器和pause容器共享名字空间(Network, PID, IPC)
 
 > 使用单独的Pause容器的好处:
->
+> 
 > - Pause几乎没有访问,使用它给其他容器共享网络,PID,IPC会达到更稳定的状态
 > - Pause可以杀死其他容器的僵尸进程
+
+### kubectl
+
+kubectl命令
+
+`kubectl get`获取当前资源
+
+```
+kubectl get pod
+    -A,--all-namespaces 查看当前所有名称空间的资源
+    -n 指定命名空间,默认值是default(kube-system空间存放当前组件的资源)
+    --show-labels 查看当前标签
+    -l 筛选资源,key=vaule
+    -o wide 展示详细信息,包括IP,分配的节点
+    -w 监视,打印结果的变化状态
+```
+
+`kubectl exec`进入容器
+
+```
+kubectl exec -it pod-demo -c myapp-1 -- /bin/bash
+    -c 指定容器名称CName, 可以省略,默认查看唯一的容器
+```
+
+`kubect explain`查看资源的描述
+
+```
+kubectl explain pod
+kubectl explain pod.spec
+```
+
+`kubectl logs`查看日志
+
+```
+kubectl logs pod-demo -c CName
+```
+
+`kubectl describe`查看详细信息
+
+```
+kubectl describe pod pod-demo
+```
+
+`kubectl delete`删除资源
+
+```
+kubectl delete pod podname
+
+# 删除所有pod
+kubectl delete pod --all
+```
 
 ## 网络
 
@@ -176,13 +227,13 @@ CNI 通过 JSON 格式的配置文件来描述网络配置，当需要设置容�
 
 ##### 封装网络与非封装网络
 
-| 特性         | 封装网络（Encapsulation）                                    | 非封装网络（Non-Encapsulation）                         |
-| ------------ | ------------------------------------------------------------ | ------------------------------------------------------- |
-| **实现方式** | 在 Pod 流量外再加一层隧道封装（如 VXLAN、Geneve）            | 直接使用底层路由，Pod 子网直接暴露                      |
-| **典型插件** | Flannel（VXLAN）、Calico（VXLAN 模式）、Cilium（VXLAN/Geneve） | Calico（BGP 模式）、Cilium（直接路由模式）              |
-| **优点**     | - 简单，不依赖底层网络支持- 容易跨子网/跨节点打通            | - 性能更高（无额外封装开销）- 网络路径更直观            |
-| **缺点**     | - 有额外开销（额外 IP 头，CPU 处理消耗）- 排错较麻烦         | - 依赖底层网络支持路由（如 BGP）- 部署复杂度高          |
-| **适用场景** | - 环境异构、底层网络不支持直连- 先快速打通集群               | - 底层网络可控（私有云/自建机房）- 对性能敏感的生产环境 |
+| 特性       | 封装网络（Encapsulation）                                  | 非封装网络（Non-Encapsulation）       |
+| -------- | ---------------------------------------------------- | ------------------------------ |
+| **实现方式** | 在 Pod 流量外再加一层隧道封装（如 VXLAN、Geneve）                    | 直接使用底层路由，Pod 子网直接暴露            |
+| **典型插件** | Flannel（VXLAN）、Calico（VXLAN 模式）、Cilium（VXLAN/Geneve） | Calico（BGP 模式）、Cilium（直接路由模式）  |
+| **优点**   | - 简单，不依赖底层网络支持- 容易跨子网/跨节点打通                          | - 性能更高（无额外封装开销）- 网络路径更直观       |
+| **缺点**   | - 有额外开销（额外 IP 头，CPU 处理消耗）- 排错较麻烦                     | - 依赖底层网络支持路由（如 BGP）- 部署复杂度高    |
+| **适用场景** | - 环境异构、底层网络不支持直连- 先快速打通集群                            | - 底层网络可控（私有云/自建机房）- 对性能敏感的生产环境 |
 
 封装网络:
 
@@ -228,17 +279,15 @@ calico有三个网络模式:
 - IPIP隧道
 - BGP直连
 
-| 特性维度       | **BGP (Border Gateway Protocol)**                            | **IPIP (IP-in-IP)**                                          | **VXLAN (Virtual Extensible LAN)**                           |
-| -------------- | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| **封装机制**   | **无封装**。依靠标准BGP路由协议在底层网络分发Pod的路由信息。 | **IP-in-IP 封装**。将原始IP包（Pod IP）整个放入另一个IP包（Node IP）中。 | **VXLAN 封装**。将原始以太网帧（L2）放入UDP包（L4）中传输。  |
-| **性能**       | **最高**。无任何隧道封装开销（无Tunnel Header），纯三层路由转发。 | **中等**。有IPIP封装头（约20字节）的开销，会增加MTU问题可能性。 | **较低**。有更大的封装头（约50字节），包括外层UDP、VXLAN头等，开销最大。 |
-| **网络要求**   | **要求高**。需要底层网络基础设施（路由器/交换机）支持BGP协议，或者工作在**同子网内**。 | **要求较低**。通常能跨不同子网工作，但需要节点间IPIP隧道可达。 | **要求最低**。通用性最强，仅需节点间IP/UDP协议可达（通常UDP端口8472），能轻松穿越任何三层网络。 |
-| **安全性**     | **依赖底层**。Pod之间的通信是明文的，安全性依赖于底层网络的安全策略。 | **依赖底层**。通信在IPIP隧道中也是明文的，安全性同样依赖底层网络。 | **可选加密**。Calico支持**IPsec加密**对VXLAN流量进行端到端加密，提供额外的安全层。 |
-| **复杂性**     | **配置复杂**。需要与网络团队协作，在路由器上配置BGP对等体（peering）。 | **配置简单**。无需变动底层网络，所有配置由Calico在节点上自动完成。 | **配置简单**。同IPIP，无需变动底层网络，全由Calico自动管理。 |
-| **适用场景**   | **数据中心、私有云**。网络设备可控且支持BGP，追求极致性能和低延迟的环境。 | **跨子网/云混合环境**。当节点不在同一网络子网，且底层网络不支持BGP时的一种折中方案。 | **严格受限的网络环境、公有云**。需要穿越严格防火墙策略或云厂商网络，或有加密需求的场景。 |
-| **工作原理图** | `[Pod A] -> [Node A] -> (路由表) -> [路由器] -> (路由表) -> [Node B] -> [Pod B]` | `[Pod A] -> [Node A] -> [IPIP隧道] -> [Node B] -> [Pod B]`   | `[Pod A] -> [Node A] -> [VXLAN隧道] -> [Node B] -> [Pod B]`  |
-
-
+| 特性维度      | **BGP (Border Gateway Protocol)**                                       | **IPIP (IP-in-IP)**                                      | **VXLAN (Virtual Extensible LAN)**                        |
+| --------- | ----------------------------------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------------- |
+| **封装机制**  | **无封装**。依靠标准BGP路由协议在底层网络分发Pod的路由信息。                                     | **IP-in-IP 封装**。将原始IP包（Pod IP）整个放入另一个IP包（Node IP）中。      | **VXLAN 封装**。将原始以太网帧（L2）放入UDP包（L4）中传输。                    |
+| **性能**    | **最高**。无任何隧道封装开销（无Tunnel Header），纯三层路由转发。                               | **中等**。有IPIP封装头（约20字节）的开销，会增加MTU问题可能性。                   | **较低**。有更大的封装头（约50字节），包括外层UDP、VXLAN头等，开销最大。               |
+| **网络要求**  | **要求高**。需要底层网络基础设施（路由器/交换机）支持BGP协议，或者工作在**同子网内**。                       | **要求较低**。通常能跨不同子网工作，但需要节点间IPIP隧道可达。                      | **要求最低**。通用性最强，仅需节点间IP/UDP协议可达（通常UDP端口8472），能轻松穿越任何三层网络。  |
+| **安全性**   | **依赖底层**。Pod之间的通信是明文的，安全性依赖于底层网络的安全策略。                                  | **依赖底层**。通信在IPIP隧道中也是明文的，安全性同样依赖底层网络。                    | **可选加密**。Calico支持**IPsec加密**对VXLAN流量进行端到端加密，提供额外的安全层。     |
+| **复杂性**   | **配置复杂**。需要与网络团队协作，在路由器上配置BGP对等体（peering）。                              | **配置简单**。无需变动底层网络，所有配置由Calico在节点上自动完成。                   | **配置简单**。同IPIP，无需变动底层网络，全由Calico自动管理。                     |
+| **适用场景**  | **数据中心、私有云**。网络设备可控且支持BGP，追求极致性能和低延迟的环境。                                | **跨子网/云混合环境**。当节点不在同一网络子网，且底层网络不支持BGP时的一种折中方案。           | **严格受限的网络环境、公有云**。需要穿越严格防火墙策略或云厂商网络，或有加密需求的场景。            |
+| **工作原理图** | `[Pod A] -> [Node A] -> (路由表) -> [路由器] -> (路由表) -> [Node B] -> [Pod B]` | `[Pod A] -> [Node A] -> [IPIP隧道] -> [Node B] -> [Pod B]` | `[Pod A] -> [Node A] -> [VXLAN隧道] -> [Node B] -> [Pod B]` |
 
 ###### VXLAN
 
@@ -334,7 +383,7 @@ sed -i "s:/dev/mapper/rl_vbox-swap:#/dev/mapper/rl_vbox-swap:g" /etc/fstab
 hostnamectl set-hostname k8s-master01
 ```
 
-| IP           | 主机名       |
+| IP           | 主机名          |
 | ------------ | ------------ |
 | 192.168.1.10 | k8s-master01 |
 | 192.168.1.11 | k8s-node01   |
@@ -473,13 +522,11 @@ EOF
 systemctl daemon-reload && systemctl enable --now cri-docker
 ```
 
-
-
 随后重启一下虚拟机
 
-#### 安装[ikuai](https://www.ikuai8.com/component/download)
+#### 安装ikuai
 
-下载iso后新建一个虚拟机并安装
+[ikuai](https://www.ikuai8.com/component/download) 下载iso后新建一个虚拟机并安装
 
 ![image-20250825000219177](kubernetes/image-20250825000219177.png)
 
@@ -603,7 +650,7 @@ systemctl enable kubelet
 ```
 
 > kubelet 是维护 Pod 生命周期和节点状态的关键组件，因此它是以守护进程的方式安装并开机自启的
->
+> 
 > linux > docker > cri-docker > kubelet > Api Server > Controller manager / Scheduler / etcd
 
 进行主节点的初始化
@@ -642,6 +689,8 @@ k8s-master01   NotReady   control-plane   5m23s   v1.29.2
 k8s-node01     NotReady   <none>          17s     v1.29.2
 k8s-node02     NotReady   <none>          11s     v1.29.2
 ```
+
+#### 安装calico
 
 由于现在k8s的所有容器没有工作在一个扁平的网络空间中,因此还需要部署网络插件,程可以参考这篇[文章](https://docs.tigera.io/calico/latest/getting-started/kubernetes/self-managed-onprem/onpremises#install-calico-with-kubernetes-api-datastore-more-than-50-nodes)
 
@@ -696,6 +745,718 @@ kube-system   kube-scheduler-k8s-master01                1/1     Running   3 (28
 
 > 此处由于pause:3.8镜像源遇到问题导致卡了很久，最后使用docker的镜像站手动安装才成功：
 > docker pull **.xuanyuan.run/pause:3.8
+
+## 资源清单
+
+k8s中所有内容都抽象为资源,资源实例化之后就叫作对象
+
+### 类别
+
+资源清单有三种类别
+
+名称空间级别
+
+- 工作负载型资源： Pod、ReplicaSet、Deployment ...
+- 服务发现及负载均衡型资源:  Service、Ingress...
+- 配置与存储型资源：Volume、CSI ...
+- 特殊类型的存储卷：ConfigMap、Secre ...
+
+集群级资源
+
+Namespace、Node、ClusterRole、ClusterRoleBinding
+
+元数据型资源
+
+HPA、PodTemplate、LimitRange
+
+### 编写
+
+资源清单的结构包括
+
+- apiVersion
+- kind
+- metadata
+- spec
+- status
+
+`apiVersion`的值是`group/apiversion`
+
+```
+# 查看所有apiVersion
+kubectl api-versions
+
+admissionregistration.k8s.io/v1
+apiextensions.k8s.io/v1
+apiregistration.k8s.io/v1
+apps/v1
+authentication.k8s.io/v1
+authorization.k8s.io/v1
+autoscaling/v1
+autoscaling/v2
+batch/v1
+certificates.k8s.io/v1
+coordination.k8s.io/v1
+crd.projectcalico.org/v1
+discovery.k8s.io/v1
+events.k8s.io/v1
+flowcontrol.apiserver.k8s.io/v1
+flowcontrol.apiserver.k8s.io/v1beta3
+networking.k8s.io/v1
+node.k8s.io/v1
+policy/v1
+rbac.authorization.k8s.io/v1
+scheduling.k8s.io/v1
+storage.k8s.io/v1
+v1    # 实际上是core/v1
+```
+
+kind指资源的类别
+
+metadata指资源的元数据,例如`name`,`namespace`,`labels`
+
+spec是资源的**期望**,指最终想要资源达到的状态
+
+status是资源的状态,通常由k8s管理
+
+资源对象的属性可以使用`kubectl explain 资源名称`
+
+```
+kubectl explain deployment
+GROUP:      apps
+KIND:       Deployment
+VERSION:    v1
+
+DESCRIPTION:
+    Deployment enables declarative updates for Pods and ReplicaSets.
+
+FIELDS:
+  apiVersion    <string>
+    APIVersion defines the versioned schema of this representation of an object.
+    Servers should convert recognized schemas to the latest internal value, and
+    may reject unrecognized values. More info:
+    https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+
+  kind  <string>
+    Kind is a string value representing the REST resource this object
+    represents. Servers may infer this from the endpoint the client submits
+    requests to. Cannot be updated. In CamelCase. More info:
+    https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+
+  metadata      <ObjectMeta>
+    Standard object's metadata. More info:
+    https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
+
+  spec  <DeploymentSpec>
+    Specification of the desired behavior of the Deployment.
+
+  status        <DeploymentStatus>
+    Most recently observed status of the Deployment.
+
+# 查询spec的子字段
+kubectl explain deployment.spec
+GROUP:      apps
+KIND:       Deployment
+VERSION:    v1
+
+FIELD: spec <DeploymentSpec>
+
+DESCRIPTION:
+    Specification of the desired behavior of the Deployment.
+    DeploymentSpec is the specification of the desired behavior of the
+    Deployment.
+
+FIELDS:
+  minReadySeconds       <integer>
+    Minimum number of seconds for which a newly created pod should be ready
+    without any of its container crashing, for it to be considered available.
+    Defaults to 0 (pod will be considered available as soon as it is ready)
+
+  paused        <boolean>
+    Indicates that the deployment is paused.
+
+  progressDeadlineSeconds       <integer>
+    The maximum time in seconds for a deployment to make progress before it is
+    considered to be failed. The deployment controller will continue to process
+    failed deployments and a condition with a ProgressDeadlineExceeded reason
+    will be surfaced in the deployment status. Note that progress will not be
+    estimated during the time a deployment is paused. Defaults to 600s.
+
+  replicas      <integer>
+    Number of desired pods. This is a pointer to distinguish between explicit
+    zero and not specified. Defaults to 1.
+
+  revisionHistoryLimit  <integer>
+    The number of old ReplicaSets to retain to allow rollback. This is a pointer
+    to distinguish between explicit zero and not specified. Defaults to 10.
+
+  selector      <LabelSelector> -required-
+    Label selector for pods. Existing ReplicaSets whose pods are selected by
+    this will be the ones affected by this deployment. It must match the pod
+    template's labels.
+
+  strategy      <DeploymentStrategy>
+    The deployment strategy to use to replace existing pods with new ones.
+
+  template      <PodTemplateSpec> -required-
+    Template describes the pods that will be created. The only allowed
+    template.spec.restartPolicy value is "Always".
+```
+
+### 示例
+
+一个pod的资源清单示例:
+
+```
+# pod1.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-demo
+  namespace: default
+  labels:
+    app: myapp
+spec:
+  containers:
+  - name: myapp-1
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/wangyanglinux/myapp:v1.0
+  - name: busybox-1
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/wangyanglinux/tools:errweb1.0
+    command:
+    - "/bin/sh"
+    - "-c"
+    - "sleep 3600"
+```
+
+运行`kubectl create -f yamlfile`来实例化资源
+
+```
+kubectl create -f pod1.yaml
+
+kubectl get pod -n default -o wide
+NAME       READY   STATUS    RESTARTS   AGE     IP              NODE         NOMINATED NODE   READINESS GATES
+pod-demo   2/2     Running   0          2m19s   10.244.58.195   k8s-node02   <none>           <none>
+```
+
+在k8s-node02中查看:
+
+```
+docker ps
+
+CONTAINER ID   IMAGE                                                                    COMMAND                  CREATED         STATUS         PORTS     NAMES
+# pod-demo
+ebd1898f0acd   swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/wangyanglinux/tools   "/bin/sh -c 'sleep 3…"   8 minutes ago   Up 8 minutes             k8s_busybox-1_pod-demo_default_c511da29-5c93-452f-b249-9f80cf18627a_0
+1fd744a657ee   79fbe47c0ab9                                                             "/bin/sh -c 'hostnam…"   8 minutes ago   Up 8 minutes             k8s_myapp-1_pod-demo_default_c511da29-5c93-452f-b249-9f80cf18627a_0
+971d4de7f2d0   registry.aliyuncs.com/google_containers/pause:3.8                        "/pause"                 8 minutes ago   Up 8 minutes             k8s_POD_pod-demo_default_c511da29-5c93-452f-b249-9f80cf18627a_0
+
+# calico-node
+16aa5f9dc2d2   17e960f4e39c                                                             "start_runit"            2 hours ago     Up 2 hours               k8s_calico-node_calico-node-sld8x_kube-system_3e01a1ff-1281-4e96-b055-22cecd813249_1
+f34a49b5c777   registry.aliyuncs.com/google_containers/pause:3.8                        "/pause"                 2 hours ago     Up 2 hours               k8s_POD_calico-node-sld8x_kube-system_3e01a1ff-1281-4e96-b055-22cecd813249_1
+
+4745d252400a   registry.aliyuncs.com/google_containers/pause:3.8                        "/pause"                 2 hours ago     Up 2 hours               k8s_POD_kube-proxy-8c7s4_kube-system_5cb1da22-8f5f-4600-ba0a-1126ae1056b7_1
+ee2f2e8c5151   9344fce2372f                                                             "/usr/local/bin/kube…"   2 hours ago     Up 2 hours               k8s_kube-proxy_kube-proxy-8c7s4_kube-system_5cb1da22-8f5f-4600-ba0a-1126ae1056b7_1
+
+# calico-typha
+11d49bc3617e   registry.aliyuncs.com/google_containers/pause:3.8                        "/pause"                 2 hours ago     Up 2 hours               k8s_POD_calico-typha-5b56944f9b-tvsx8_kube-system_9be5c2e4-459a-4748-9931-ba4cd92f0404_1
+539976764de5   5993c7d25ac5                                                             "/sbin/tini -- calic…"   2 hours ago     Up 2 hours               k8s_calico-typha_calico-typha-5b56944f9b-tvsx8_kube-system_9be5c2e4-459a-4748-9931-ba4cd92f0404_1
+```
+
+> 可以看到node2中存在多个pod,由多个容器组成,每个pod都有一个pause容器
+
+如果创建pod失败,可以通过`kubectl describe`查看k8s级别的日志然后通过`kubectl logs`查看容器b
+
+#### 修改容器内容
+
+访问pod的IP地址:
+
+```
+curl 10.244.58.196
+www.xinxianghf.com | hello MyAPP | version v1.0
+```
+
+在node2进入镜像修改信息:
+
+```
+docker exec -it k8s_myapp-1_pod-demo_default_c511da29-5c93-452f-b249-9f80cf18627a_1 /bin/bash
+
+echo 123 >> /usr/local/nginx/html/index.html
+```
+
+重新访问发现返回信息已经修改
+
+```
+curl 10.244.58.196
+www.xinxianghf.com | hello MyAPP | version v1.0
+123
+```
+
+事实上可以直接使用`kubectl exec`直接进入node中的容器
+
+```
+[root@k8s-master01 ~]# kubectl exec -it pod-demo -c myapp-1 -- /bin/bash
+pod-demo:/# echo "qwe" >> /usr/local/nginx/html/index.html 
+```
+
+重新访问发现已经进行修改:
+
+```
+[root@k8s-master01 ~]# curl 10.244.58.196
+www.xinxianghf.com | hello MyAPP | version v1.0
+123
+qwe
+```
+
+## Pod的生命周期
+
+Pod 的生命周期包含多个阶段，从容器的初始化到主容器的运行和终止。Pod 中的容器分为**Init 容器（InitC）**和**主容器（MainC）**，它们各自承担不同的职责。
+
+![pod启动流程](kubernetes/pod启动流程-1757784341784-4.png)
+
+Init容器总是运行到成功完成为止,只有当上一个initC被创建并且成功完成(容器死亡,返回`0`)之后,第二个initC才会被创建
+
+如果一个initC运行失败(返回码不为0),kubelet会重头运行整个initC流程
+
+- 由于initC运行时间短,initC可以执行一些危险操作
+- initC天然具有阻塞的特性,可以进行一些判断,例如控制容器启动流程
+
+> 如果Pod的init容器失败,K8s会不断重复重启该Pod,直到init容器成功为止,如果Pod对应的restartPolicy为Nerver则不会重启
+
+mainC可以并发运行,可以同时存在
+
+mainC中存在**钩子**和**探针**:
+
+- 钩子: 当容器达到某种状态时进行动作,由pod所在节点的kubelet执行
+- 探针: kubelet对容器执行的定制诊断
+
+钩子和探测都是可选的,不需要强制设置,都有pod所在节点的kubelet执行
+
+就绪探测和存活探测需要确保容器已经正确启动再开始探测,新版本的k8s提供了启动探测来保障就绪探测和存活探测在启动后开始探测直到容器关闭
+
+### init容器(InitC)
+
+Init 容器总是在主容器之前运行，且必须成功完成（退出码为 0）才会继续执行下一个 Init 容器或启动主容器。
+
+特性
+
+1. **线性运行**：Init 容器按顺序执行，前一个成功完成后才会启动下一个。
+2. **阻塞特性**：可用于控制容器启动流程或执行环境检查。
+3. **失败处理**：若 Init 容器失败（退出码非 0），Kubernetes 会根据 RestartPolicy 重启整个 Pod（Never 策略除外）。
+
+示例: 域名解析检查
+
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  name: initc-demo
+spec:
+  containers:
+  - name: main-app
+    image: myapp:latest
+  initContainers:
+  - name: check-service
+    image: busybox
+    command: ['sh', '-c', 'until nslookup myservice; do echo waiting; sleep 2; done;']
+  - name: check-db
+    image: busybox
+    command: ['sh', '-c', 'until nslookup mydb; do echo waiting; sleep 2; done;']
+```
+
+### 主容器(MainC)
+
+主容器是 Pod 中运行应用程序的主要容器，可以包含多个并行运行的容器。
+
+主容器本身也可以并行运行.
+
+### 探针(Probes)
+
+探针由 kubelet 执行，用于监控容器状态,kubelet调用容器的Handle(处理程序)执行诊断
+
+探针由 kubelet 执行，用于监控容器状态：
+
+| 探针类型             | 作用时期   | 失败行为    |
+| ---------------- | ------ | ------- |
+| `startupProbe`   | 容器启动阶段 | 静默      |
+| `livenessProbe`  | 整个运行周期 | 重启容器    |
+| `readinessProbe` | 整个运行周期 | 从服务端点移除 |
+
+探针处理程序类型
+
+1. **ExecAction**：在容器内执行命令
+2. **TCPSocketAction**：检查端口连通性
+3. **HTTPGetAction**：发送 HTTP 请求检查
+
+探针配置参数
+
+- `initialDelaySeconds`：延迟开始时间（秒）
+- `periodSeconds`：检查间隔（秒）
+- `timeoutSeconds`：探针执行检测请求后，等待响应的超时时间
+- `successThreshold`：探针检测失败后认为成功的最小连接成功次数
+- `failureThreshold`：探测失败的重试次数
+
+每次探测都将获得以下三种结果之一:
+
+- 成功: 容器通过检查
+- 失败: 容器未通过检查
+- 未知: 诊断失败,不会采取任何行动
+
+#### 启动探测
+
+启动探针(startupProbe)保障存活探针在执行时不会因为时间设定问题导致无限死亡或延迟很长的情况
+
+结果:
+
+- 成功: 开始允许存活探测,就绪探测开始执行
+- 失败: 静默
+- 未知: 静默
+
+示例:
+
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  name: startupprobe-1
+  namespace: default
+spec:
+  containers:
+  - name: myapp-container
+        image: wangyanglinux/myapp:v1.0
+    imagePullPolicy: IfNotPresent
+    readinessProbe:
+      httpGet:
+        port: 80
+        path: /index2.html
+      initialDelaySeconds: 1
+      periodSeconds: 3
+    startupProbe:
+      httpGet:
+        path: /index1.html
+        port: 80
+      failureThreshold: 30
+      periodSeconds: 10
+```
+
+> 应用程序将会有最多 5 分钟 failureThreshold * periodSeconds（30 * 10 = 300s）的时间来完成其启动过程。
+
+#### 就绪探测
+
+添加就绪探针(readinessProbe),解决尤其是扩容时保证提供给用户的服务都是可用的.
+
+如果pod内部的容器不添加就绪探测,则默认就绪,如果添加了就绪探测,只有就绪通过之后才修改为就绪状态,当前pod内所有容器就绪,才标记当前pod就绪
+
+![pod](kubernetes/pod-1757755765372-1.png)
+
+Service只有当同时满足**标签匹配**(子集匹配)和pod处于就绪状态时才会加入pod到负载均衡集群中
+
+- 探测成功 将容器状态修改为就绪
+- 探测失败 静默(未就绪状态)
+- 探测未知 静默
+
+> 就绪探测是在从开始探测到容器结束整个过程中的,因此可能会出现就绪一段时候后变为未就绪状态
+
+示例:
+
+```
+# 基于 HTTP Get 方式
+apiVersion: v1
+kind: Pod
+metadata:
+  name: readiness-httpget-pod
+  namespace: default
+  labels:
+    app: myapp
+    env: test
+spec:
+  containers:
+  - name: readiness-httpget-container
+        image: wangyanglinux/myapp:v1.0
+    # 镜像下载策略
+    imagePullPolicy: IfNotPresent
+    readinessProbe:
+      httpGet:
+        port: 80
+        path: /index1.html
+      initialDelaySeconds: 1
+      periodSeconds: 3
+
+# 基于 EXEC 方式
+apiVersion: v1
+kind: Pod
+metadata:
+  name: readiness-exec-pod
+  namespace: default
+spec:
+  containers:
+  - name: readiness-exec-container
+        image: wangyanglinux/tools:busybox
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/sh","-c","touch /tmp/live ; sleep 60; rm -rf /tmp/live;sleep
+    readinessProbe:
+      exec:
+      command: ["test","-e","/tmp/live"]
+    initialDelaySeconds: 1
+    periodSeconds: 3
+
+# 基于 TCP Check 方式
+apiVersion: v1
+kind: Pod
+metadata:
+  name: readiness-tcp-pod
+spec:
+  containers:
+  - name: readiness-exec-container
+    image: wangyanglinux/myapp:v1.0
+    readinessProbe:
+      initialDelaySeconds: 5
+      timeoutSeconds: 1
+      tcpSocket:
+      port: 80
+```
+
+#### 存活探测
+
+如果pod内部不指定存活探测(livenessProbe),可能会发送容器运行但是无法提供服务的情况,存活探测从启动探测后持续到容器关闭
+
+- 成功: 静默
+- 失败: 根据重启的策略进行重启的动作
+- 未知: 静默
+
+示例
+
+```yaml
+# 基于 Exec 方式
+apiVersion: v1
+kind: Pod
+metadata:
+name: liveness-exec-pod
+    namespace: default
+spec:
+    containers:
+    - name: liveness-exec-container
+        image: wangyanglinux/tools:busybox
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/sh","-c","touch /tmp/live ; sleep 60; rm -rf /tmp/live;sleep 3600"]
+        livenessProbe:
+            exec:
+                command: ["test","-e","/tmp/live"]
+            initialDelaySeconds: 1
+            periodSeconds: 3
+# 基于 HTTP Get 方式
+apiVersion: v1
+kind: Pod
+metadata:
+    name: liveness-httpget-pod
+    namespace: default
+spec:
+    containers:
+        - name: liveness-httpget-container
+      image: wangyanglinux/myapp:v1.0
+      imagePullPolicy: IfNotPresent
+      ports:
+      - name: http
+        containerPort: 80
+      livenessProbe:
+        httpGet:
+          port: 80
+          path: /index.html
+        initialDelaySeconds:periodSeconds: 3
+      timeoutSeconds: 3
+
+# 基于 TCP Check 方式
+apiVersion: v1
+kind: Pod
+  metadata:
+      name: liveness-tcp-pod
+spec:
+  containers:
+  - name: liveness-tcp-container
+    image: wangyanglinux/myapp:v1.0
+    livenessProbe:
+      initialDelaySeconds: 5
+      timeoutSeconds: 1
+      tcpSocket:
+          port: 80
+```
+
+### 钩子(Hooks)
+
+钩子在容器生命周期的特定时刻执行：
+
+1. **postStart**：容器启动后立即执行（与主进程并行）
+2. **preStop**：容器终止前执行（优雅关闭）
+
+hook的类型包括:
+
+- exec: 执行一段命令
+- HTTP: 发送HTTP请求
+
+示例:
+
+```
+apiVersion: v1
+kind: Pod
+metadata:
+    name: lifecycle-exec-pod
+spec:
+    containers:
+    - name: lifecycle-exec-container
+      image: wangyanglinux/myapp:v1
+      lifecycle:
+        postStart:
+          exec:
+            command: ["/bin/sh", "-c", "echo postStart > /usr/share/message"]
+        preStop:
+          exec:
+            command: ["/bin/sh", "-c", "echo preStop > /usr/share/message"]
+
+
+# 查看日志
+kubectl exec -it lifecycle-exec-pod -- /bin/sh
+/ # cat /usr/share/message 
+postStart
+
+# 编写一个脚本
+/ # while true;
+> do
+> cat /usr/share/message 
+> done
+
+# 在另一个shell中结束pod
+kubectl delete pod lifecycle-exec-pod
+pod "lifecycle-exec-pod" deleted
+
+# 输出:
+postStart
+postStart
+postStart
+preStop
+preStop
+preStop
+preStop
+```
+
+还可以通过HTTP探测:
+
+```
+# 基于http
+apiVersion: v1
+kind: Pod
+metadata:
+    name: lifecycle-httpget-pod
+    labels:
+      name: lifecycle-httpget-pod
+spec:
+    containers:
+    - name: lifecycle-httpget-container
+      image: wangyanglinux/myapp:v1.0
+      ports:
+      - containerPort: 80
+      lifecycle:
+        postStart:
+          httpGet:
+            host: 192.168.1.10
+            path: index.html
+            port: 1234
+        preStop:
+          httpGet:
+            host: 192.168.1.10
+            path: hostname.html
+            port: 1234
+```
+
+在 k8s 中，preStop理想的状态是 pod 优雅释放，但是并不是每一个 Pod 都会这么顺利,可能会有以下问题:
+
+- Pod 卡死，处理不了优雅退出的命令或者操作
+- 优雅退出的逻辑有 BUG，陷入死循环
+- 代码问题，导致执行的命令没有效果
+
+对于以上问题，k8s 的 Pod 终止流程中还有一个 "最多可以容忍的时间"，即 grace period ，这个值默认是 30 秒，当我们执行 kubectl delete的时候也可以通过 --grace-period 参数显示指定一个优雅退出时间来覆盖 Pod 中的配置，如果超过我们配置的 grace period 时间之后，k8s 就只能选择强制 kill Pod。
+
+> 值得注意的是，这与preStop Hook和 SIGTERM 信号并行发生。k8s 不会等待 preStop Hook 完成。如果你的应用程序完成关闭并在terminationGracePeriod 完成之前退出，k8s  会立即进入下一步
+
+### pod运行调度流程
+
+![image-20250913232342180](kubernetes/image-20250913232342180.png)
+
+1. 开发构建镜像并推送到仓库
+2. 运维人员拉取容器镜像
+3. 通过 kubectl 创建 Pod 资源
+4. API 服务器接收请求并存储到 etcd
+5. 调度器监听API服务器分配Pod到合适工作节点
+6. kubelet监听API服务器开始创建pod
+7. kubelet通过CRI拉取并启动容器
+8. kubelet向API服务器汇报Pod状态
+
+### 示例
+
+探针和钩子并不冲突,也不需要全部使用
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lifecycle-pod
+  labels:
+    app: lifecycle-pod
+spec:
+  containers:
+  - name: busybox-container
+    image: wangyanglinux/tools:busybox
+    command: ["/bin/sh", "-c", "touch /tmp/live ; sleep 600; rm -rf /tmp/live; sleep 3600"]
+    # 存活探测
+    livenessProbe:
+      exec:
+        command: ["test", "-e", "/tmp/live"]
+      # 延迟
+      initialDelaySeconds: 1
+      # 间隔
+      periodSeconds: 3
+
+    # 启动钩子
+    lifecycle:
+      postStart:
+        httpGet:
+          host: 192.168.1.10
+          path: index.html
+          port: 1234
+      preStop:
+        httpGet:
+          host: 192.168.1.10
+          path: hostname.html
+          port: 1234
+  - name: myapp-container
+    image: wangyanglinux/myapp:v1.0
+    # 存活检测
+    livenessProbe:
+      httpGet:
+        port: 80
+        path: /index.html
+      initialDelaySeconds: 1
+      periodSeconds: 3
+      timeoutSeconds: 3
+    # 就绪检测
+    readinessProbe:
+      httpGet:
+        port: 80
+        path: /index1.html
+      initialDelaySeconds: 1
+      periodSeconds: 3
+  initContainers:
+  - name: init-myservice
+    image: wangyanglinux/tools:busybox
+    command: ['sh', '-c', 'until nslookup myservice.default.svc.cluster.local; do echo waiting for myservice; sleep 2; done;']
+  - name: init-mydb
+    image: wangyanglinux/tools:busybox
+    command: ['sh', '-c', 'until nslookup mydb.default.svc.cluster.local; do echo waiting for mydb; sleep 2; done;']
+```
+
+### 最佳实践
+
+1. **合理使用 Init 容器**：处理依赖检查和初始化任务
+2. **配置适当的探针**：确保应用健康状态可监控
+3. **实现优雅终止**：使用 preStop 钩子确保数据一致性
+4. **设置资源限制**：防止资源耗尽影响节点稳定性
+5. **考虑启动性能**：合理配置 initialDelaySeconds 避免误报
 
 ## 创建集群(minikube)
 
@@ -794,24 +1555,27 @@ kubetctl logs hello-node-c74958b5d-n2wqp
 默认情况下,Pod只能通过Kubernetes集群中的内部IP地址访问.要使得hello-node容器可以从Kubernetes虚拟网络的外部访问,必须将Pod通过Kubernetes Service公开出来.
 
 1. 使用kubectl expose将Pod暴露给公网:
+   
    ```
    kubectl expose deployment hello-node --type=LoadBalancer --port=8080
    ```
-
+   
    这里的`--type=LoadBalancer`参数表明希望将Service暴露到集群外部,由于测试镜像中的应用程序代码仅监听TCP 8080端口,所以即使使用`kubectl expose`暴露其他端口也无法访问
 
 2. 查看创建的Service:
+   
    ```
    kubectl get services
    ```
-
+   
    对于支持负载均衡器的云服务平台而言，平台将提供一个外部 IP 来访问该服务。 在 Minikube 上，`LoadBalancer` 使得服务可以通过命令 `minikube service` 访问。
 
 3. 打开浏览器窗口:
+   
    ```
    minikube service hello-node
    ```
-
+   
    这将打开一个浏览器窗口，为应用程序提供服务并显示应用的响应。
 
 ### 启用插件
@@ -819,16 +1583,19 @@ kubetctl logs hello-node-c74958b5d-n2wqp
 Minikube有一组内置的插件,可以在本地Kubernetes环境中启用,禁用和打开
 
 1. 列出当前支持的插件:
+   
    ```
    minikube addons list
    ```
 
 2. 启用插件`metrics-server`
+   
    ```
    minikube addons enable metrics-server
    ```
 
 3. 查看通过安装插件所创建的Pod和Service
+   
    ```
    kubectl get pod,svc -n kube-system
    NAME                                   READY   STATUS              RESTARTS      AGE
@@ -847,6 +1614,7 @@ Minikube有一组内置的插件,可以在本地Kubernetes环境中启用,禁用
    ```
 
 4. 检查`metrics-server`的输出
+   
    ```
    kubectl top pods
    NAME                         CPU(cores)   MEMORY(bytes)   
@@ -854,6 +1622,7 @@ Minikube有一组内置的插件,可以在本地Kubernetes环境中启用,禁用
    ```
 
 5. 禁用`metrics-server`
+   
    ```
    minikube addons disable metrics-server
    🌑  "The 'metrics-server' addon is disabled
@@ -918,22 +1687,22 @@ sudo cat /sys/class/dmi/id/product_uuid
 
 控制面板:
 
-| 协议 | 方向 | 端口范围  | 目的                    | 使用者               |
-| ---- | ---- | --------- | ----------------------- | -------------------- |
-| TCP  | 入站 | 6443      | Kubernetes API 服务器   | 所有                 |
-| TCP  | 入站 | 2379-2380 | etcd 服务器客户端 API   | kube-apiserver、etcd |
-| TCP  | 入站 | 10250     | kubelet API             | 自身、控制面         |
-| TCP  | 入站 | 10259     | kube-scheduler          | 自身                 |
-| TCP  | 入站 | 10257     | kube-controller-manager | 自身                 |
+| 协议  | 方向  | 端口范围      | 目的                      | 使用者                 |
+| --- | --- | --------- | ----------------------- | ------------------- |
+| TCP | 入站  | 6443      | Kubernetes API 服务器      | 所有                  |
+| TCP | 入站  | 2379-2380 | etcd 服务器客户端 API         | kube-apiserver、etcd |
+| TCP | 入站  | 10250     | kubelet API             | 自身、控制面              |
+| TCP | 入站  | 10259     | kube-scheduler          | 自身                  |
+| TCP | 入站  | 10257     | kube-controller-manager | 自身                  |
 
 工作节点:
 
-| 协议 | 方向 | 端口范围    | 目的               | 使用者           |
-| ---- | ---- | ----------- | ------------------ | ---------------- |
-| TCP  | 入站 | 10250       | kubelet API        | 自身、控制面     |
-| TCP  | 入站 | 10256       | kube-proxy         | 自身、负载均衡器 |
-| TCP  | 入站 | 30000-32767 | NodePort Services† | 所有             |
-| UDP  | 入站 | 30000-32767 | NodePort Services† | 所有             |
+| 协议  | 方向  | 端口范围        | 目的                 | 使用者      |
+| --- | --- | ----------- | ------------------ | -------- |
+| TCP | 入站  | 10250       | kubelet API        | 自身、控制面   |
+| TCP | 入站  | 10256       | kube-proxy         | 自身、负载均衡器 |
+| TCP | 入站  | 30000-32767 | NodePort Services† | 所有       |
+| UDP | 入站  | 30000-32767 | NodePort Services† | 所有       |
 
 #### 安装容器运行时
 
@@ -1248,6 +2017,7 @@ kubeadm join 192.168.163.70:6443 --token abcdef.0123456789abcdef \
 ```
 
 > 如果需要修改集群配置,可以使用
+> 
 > ```
 > # 存在多个容器进行时时必须指定
 > sudo kubeadm reset --cri-socket unix:///var/run/cri-dockerd.sock -f
@@ -1259,7 +2029,6 @@ kubeadm join 192.168.163.70:6443 --token abcdef.0123456789abcdef \
 > # 重新初始化
 > sudo kubeadm init --config ./kubeadm_init.yaml
 > ```
->
 
 复制配置文件
 
@@ -1311,7 +2080,7 @@ kubectl get pods -A
 ```
 
 > 发现启动失败了.觉得可能是镜像下载的问题,更换镜像地址之后依旧无法启动,查看报错信息:
->
+> 
 > ```
 > kubectl logs -n kube-flannel kube-flannel-ds-4pzsd
 > Defaulted container "kube-flannel" out of: kube-flannel, install-cni-plugin (init), install-cni (init)
@@ -1325,16 +2094,15 @@ kubectl get pods -A
 > I0703 12:45:00.969055       1 main.go:479] Found network config - Backend type: vxlan
 > E0703 12:45:00.969209       1 main.go:268] Failed to check br_netfilter: stat /proc/sys/net/bridge/bridge-nf-call-iptables: no such file or directory
 > ```
->
+> 
 > 发现需要配置内核参数:
->
+> 
 > ```
 > sudo vim /etc/modules-load.d/br_netfilter.conf
 > br_netfilter
 > 
 > sudo systemctl restart systemd-modules-load.service
 > ```
->
 
 ```
 # 成功部署后的节点状态
@@ -1422,8 +2190,6 @@ kubectl apply -f deployment.yaml
 
 ### Service
 
-
-
 创建一个该Deployment的Service:
 
 ```
@@ -1431,6 +2197,7 @@ kubectl create service clusterip my-service --tcp=80:8080 --dry-run=client -o ya
 ```
 
 默认配置如下:
+
 ```
 apiVersion: v1
 kind: Service
@@ -1460,20 +2227,20 @@ kind: Service
 metadata:
   creationTimestamp: null
   labels:
-    app: my-app-service	# 修改名称
+    app: my-app-service    # 修改名称
   name: my-app-service
 spec:
   ports:
-  - name: http	# 修改名称标识,多端口时需要唯一
-    port: 80	# service暴露的端口
+  - name: http    # 修改名称标识,多端口时需要唯一
+    port: 80    # service暴露的端口
     protocol: TCP
-    targetPort: 80	# 容器实际端口
-  - name: https	# 添加一个端口映射
+    targetPort: 80    # 容器实际端口
+  - name: https    # 添加一个端口映射
     protocol: TCP
     port: 443
     targetPort: 8443
   selector:
-    app: my-app	# 必须与Pod标签匹配
+    app: my-app    # 必须与Pod标签匹配
   type: ClusterIP
 status:
   loadBalancer: {}
@@ -1523,12 +2290,6 @@ wget -q -O - http://my-app-service
 # 删除busybox
 kubectl delete pod test
 ```
-
-
-
-
-
-
 
 ## 问答题
 
@@ -1591,20 +2352,27 @@ pod应该是动态管理的,手动创建pod繁琐且不方便自动化管理
 ### 第二天
 
 1. 什么是有状态服务和无状态服务
+   
    ```
    无状态(stateless)意味着在创建新容器时，不会存储任何过去的数据或状态，也不需要持久化,例如Nginx
    有状态(stateful)应用程序通常涉及一些数据库,并处理对它的读取和写入,例如MySQL
    ```
+
 2. 什么是冗余
+   
    ```
    冗余是指在系统中额外部署超出最低需求的备用资源,提高可用性,增强容错能力
    ```
+
 3. 在k8s中无状态服务的冗余如何实现
+   
    ```
    1. 在Deployment控制器中通过replicas字段设置需要额外运行的副本数量
    2. Service作为负载均衡器,将请求自动分发到所有健康的Pod副本
    ```
+
 4. kubectl create 中的--dry-run=client有什么作用,用于什么场景
+   
    ```
    kubectl create 基于文件或标准输入创建一个资源
    --dry-run=client参数在不实际执行操作的情况下模拟操作结果，类似于 "试运行"
@@ -1612,33 +2380,45 @@ pod应该是动态管理的,手动创建pod繁琐且不方便自动化管理
    # 生成 Deployment 的 YAML 模板（不实际部署）
    kubectl create deployment my-app --image=nginx:alpine --replicas=3 --dry-run=client -o yaml > deployment.yaml
    ```
+
 5. Deployment的主要作用是什么,解决了什么问题
+   
    ```
    Deployment用于管理运行一个应用负载的一组Pod,通常适用于无状态的负载
    一个 Deployment 为 Pod 和 ReplicaSet 提供声明式的更新能力。
    用户只需要负责描述 Deployment 中的目标状态，而 Deployment 控制器（Controller） 以受控速率更改实际状态， 使其变为期望状态。用户可以定义 Deployment 以创建新的 ReplicaSet，或删除现有 Deployment， 并通过新的 Deployment 收养其资源。
    ```
+
 6. Deployment其后端调用的哪个服务
+   
    ```
    ReplicaSet
    ```
+
 7. 什么是滚动更新,默认值是多少,如何设置
+   
    ```
    滚动更新是通过逐步缩减旧的 ReplicaSet，并扩容新的 ReplicaSet的方式更新Pod
    可以通过.maxUnavailable和.maxSurge分别控制最大不可用(更新过程中pod不可用的上限,默认25%)和最大峰值(可以创建的超出期望pod数量的个数,默认25%),可以是绝对数,也可以是百分比
    ```
-8. 如果使用Deployment启动了多个Pod,那么其他服务是否需要挨个访问其ip或域名?有什么更好的方法
 
+8. 如果使用Deployment启动了多个Pod,那么其他服务是否需要挨个访问其ip或域名?有什么更好的方法
+   
    ```
    不需要,使用deployment启动pod时,pod重启或重建后IP会改变,应该为deployment创建匹配的Service
    ```
+
 9. 什么是Service,其主要功能是什么
    Kubernetes 中 Service 是 将运行在一个或一组 [Pod](https://kubernetes.io/zh-cn/docs/concepts/workloads/pods/) 上的网络应用程序公开为网络服务的方法。
+
 10. Service的底层使用的什么服务
+    
     ```
     iptables/ipvs
     ```
+
 11. Service有几种网络类型,区别是什么
+    
     ```
     4种
     1. ClusterIP(默认值),集群内部自动分配虚拟IP,适用于微服务间通信
@@ -1646,16 +2426,22 @@ pod应该是动态管理的,手动创建pod繁琐且不方便自动化管理
     3. LoadBalancer,使用云平台的负载均衡器向外部公开 Service。
     4. ExternalName,集群内部,不分配IP,仅具有DNS别名,将服务名解析为外部域名
     ```
+
 12. endpoint是什么,和Service有什么关系
+    
     ```
     enpoint是动态更新的IP列表,记录实际提供服务的Pod的真实IP和端口
     Service提供稳定的访问入口,将流量转发到Endpoint中的Pod
     ```
+
 13. BusyBox在k8s中有什么作用
+    
     ```
     BusyBox是一个轻量级的镜像,集成了300多个常用linux命令,在容器化环境中主要用于故障排查和系统维护
     ```
+
 14. 创建一个Deployment,启动多副本Nginx并为其设置ClusterIP类型的Service,使用busybox访问此Service验证是否能够访问到所有Nginx副本
+    
     ```
     kubectl apply -f deployment.yaml 
     kubectl apply -f service.yaml
@@ -1664,7 +2450,9 @@ pod应该是动态管理的,手动创建pod繁琐且不方便自动化管理
     nslookup my-app-service
     wget -q -O - http://my-app-service
     ```
+
 15. 设置kubectl别名为k,并配置命令自动补全
+    
     ```
     vim /etc/profile.d/k8s.sh
     alias k=kubectl
@@ -1676,12 +2464,3 @@ pod应该是动态管理的,手动创建pod繁琐且不方便自动化管理
     # 配置别名 k 的补全
     echo 'complete -o default -F __start_kubectl k' | sudo tee -a /etc/bash_completion.d/kubectl > /dev/null
     ```
-
-    
-
-
-
-
-
-
-

@@ -85,7 +85,7 @@ E：表示为企业版本，属于开源盈利版本（企业应用）
 
 ### 部署
 
-这里使用centos7.9部署mysl二进制文件,首先下载MySQL的二进制文件:[下载地址](https://dev.mysql.com/downloads/mysql/)
+这里使用centos7.9部署mysql二进制文件,首先下载MySQL的二进制文件:[下载地址](https://dev.mysql.com/downloads/mysql/)
 
 关闭selinux安全功能
 
@@ -227,7 +227,7 @@ mysql    11258 11119  3 23:27 pts/0    00:00:00 /usr/local/mysql/bin/mysqld --ba
 使用命令启动:
 
 - `mysqld`
-
+  
   ```
   /usr/local/mysql/bin/mysqld --user=mysql --datadir=/data/3306/data --basedir=/usr/local/mysql --socket=/tmp/mysql.sock &
   
@@ -236,7 +236,7 @@ mysql    11258 11119  3 23:27 pts/0    00:00:00 /usr/local/mysql/bin/mysqld --ba
   ```
 
 - `mysqld_safe`
-
+  
   ```
   /usr/local/mysql/bin/mysqld_safe --datadir=/data/3306/data &
   
@@ -246,7 +246,7 @@ mysql    11258 11119  3 23:27 pts/0    00:00:00 /usr/local/mysql/bin/mysqld --ba
   ```
 
 - `systemctl`
-
+  
   ```
   vim /usr/lib/systemd/system/mysqld.service
   [Unit]
@@ -271,7 +271,7 @@ mysql    11258 11119  3 23:27 pts/0    00:00:00 /usr/local/mysql/bin/mysqld --ba
   ```
 
 - `service`
-
+  
   ```
   service mysqld start
   
@@ -343,6 +343,7 @@ create user 用户名@'白名单' identified by '密码信息';
   用户名@'127.0.0.1'
 
 - 限制远程登录(只允许远程)
+  
   ```
   用户名@'主机域信息' create user test01@'10.0.0.%' identified by '123456';
   
@@ -360,6 +361,7 @@ create user 用户名@'白名单' identified by '密码信息';
   ```
 
 - 允许远程和本地
+  
   ```
   用户名@'%'
   ```
@@ -482,10 +484,10 @@ GRANT 权限类型 ON 权限对象 TO 用户角色 identified by '123456';
 权限对象包括数据库和数据表
 
 ```
-*.*		所有库的所有表
-dba.*	dba库中的所有表
-*.tba	可以操控所有库,但只能操作所有库中的tba
-dba,tba	只能操控dba中的tba
+*.*        所有库的所有表
+dba.*    dba库中的所有表
+*.tba    可以操控所有库,但只能操作所有库中的tba
+dba,tba    只能操控dba中的tba
 ```
 
 #### 删除权限
@@ -684,16 +686,17 @@ mysql -u name -p passwd -h IP -P port
 ```
 
 > 默认启动的端口还包括33060,该端口可以实现mysqlx协议的通讯
->
+> 
 > 33060 mysqlx 支持mysql-shell连接服务端(批量管理数据库服务)
 > 3306 mysql 支持mysql客户端,mysqldump,mysqlpump连接服务端
->
+> 
 > 可以在`/etc/my.cnf`中添加
+> 
 > ```
 > [mysqld]
 > mysqlx=0
 > ```
->
+> 
 > 来关闭该端口
 
 ##### 连接方法
@@ -725,22 +728,26 @@ mysql -u name -p passwd -S socket
 ##### 排错流程
 
 1. 测试网络是否连通
+   
    ```
    ping 10.0.0.51
    telnet 10.0.0.51 3306
    ```
 
 2. 测试用户是否可以登录
+   
    ```
    mysql -uroot -p -h10.0.0.51 -p3306
    ```
 
 3. 客户端地址是否与远程用户白名单匹配
+   
    ```
    select user,host from mysql.user;
    ```
 
 4. 确认服务端用户的密码插件设置
+   
    ```
    select user,account_locked from mysql.user;
    ```
@@ -871,6 +878,7 @@ mysqld --initialize-insecure --user=mysql --datadir=/data/3309/data --basedir=/u
 ```
 
 运行多实例
+
 ```
 # 命令启动
 mysqld --defaults-file=/data/3307/my.cnf &
@@ -1130,7 +1138,7 @@ drwx------ 2 mysql mysql       20 9月   8 17:21 xiaoB
 
 > 对于一个数据库实际存储在一个目录中,xiaoA目录中有以下文件:
 > db.opt  t1.frm  t1.ibd
->
+> 
 > t1.ibd存储着具体的数据,t1.frm保存表的结构信息
 
 ###### 安全模式启动新版本的mysql
@@ -1187,7 +1195,7 @@ mysql> select * from mysql.user\G;
            Insert_priv: N
            Update_priv: N
            Delete_priv: N
-           			...
+                       ...
          max_questions: 0
            max_updates: 0
        max_connections: 0
@@ -1195,7 +1203,6 @@ mysql> select * from mysql.user\G;
                 plugin: mysql_native_password
  authentication_string: NULL
       password_expired: N
-      
 ```
 
 ###### 升级数据信息和授权表结构:
@@ -1212,7 +1219,7 @@ mysql> select * from mysql.user\G;
            Insert_priv: N
            Update_priv: N
            Delete_priv: N
-           
+
                 plugin: mysql_native_password
  authentication_string: *THISISNOTAVALIDPASSWORDTHATCANBEUSEDHERE
       password_expired: N
@@ -1290,15 +1297,14 @@ mysql8.0正常授权表结构:
              Update_priv: Y
              Delete_priv: Y
              Create_priv: Y
-			 
+
           account_locked: N
         Create_role_priv: Y
           Drop_role_priv: Y
   Password_reuse_history: NULL
      Password_reuse_time: NULL
 Password_require_current: NULL
-         User_attributes: NULL	 
-
+         User_attributes: NULL     
 ```
 
 运行完安全启动之后会自动的升级mysql授权表
@@ -1312,7 +1318,7 @@ Password_require_current: NULL
              Delete_priv: Y
              Create_priv: Y
           account_locked: N
-		Create_role_priv: Y
+        Create_role_priv: Y
           Drop_role_priv: Y
   Password_reuse_history: NULL
      Password_reuse_time: NULL
@@ -1369,10 +1375,10 @@ Description=MySQL Server
 Documentation=mysqld.service
 After=network.target
 After=syslog.target
- 
+
 [Install]
 WantedBy=multi-user.target
- 
+
 [Service]
 User=mysql
 Group=mysql
@@ -1454,5 +1460,326 @@ ps -ef|grep mysql
 mysql     12929      1  1 18:10 ?        00:00:00 /usr/local/mysql56/bin/mysqld --defaults-file=/data/3356/my.cnf
 ```
 
+### SQL语言
+
+#### 类型
+
+根据SQL语言操作方式细化为四种类型
+
+DDL
+
+Data Definition Language数据定义语言
+
+负责管理数据库的基本数据(不会修改表的内容),比如增删库,表,索引用户等
+
+`CREATE（创建）、ALTER（修改）、DROP（删除）`等
+
+```
+mysql> ? Data Definition;
+You asked for help about help category: "Data Definition"
+For more information, type 'help <item>', where <item> is one of the following
+topics:
+   ALTER DATABASE
+   ALTER EVENT
+   ALTER FUNCTION
+   ALTER INSTANCE
+   ALTER LOGFILE GROUP
+   ALTER PROCEDURE
+   ALTER SCHEMA
+   ALTER SERVER
+   ALTER TABLE
+   ALTER TABLESPACE
+   ALTER VIEW
+   CREATE DATABASE
+   CREATE EVENT
+   CREATE FUNCTION
+   CREATE INDEX
+   CREATE LOGFILE GROUP
+   CREATE PROCEDURE
+   CREATE SCHEMA
+   CREATE SERVER
+   CREATE SPATIAL REFERENCE SYSTEM
+   CREATE TABLE
+   CREATE TABLESPACE
+   CREATE TRIGGER
+   CREATE VIEW
+   DROP DATABASE
+   DROP EVENT
+   DROP FUNCTION
+   DROP INDEX
+   DROP PROCEDURE
+   DROP SCHEMA
+   DROP SERVER
+   DROP SPATIAL REFERENCE SYSTEM
+   DROP TABLE
+   DROP TABLESPACE
+   DROP TRIGGER
+   DROP VIEW
+   FOREIGN KEY
+   RENAME TABLE
+   TRUNCATE TABLE
+```
+
+DCL
+
+Data Control Language数据控制语言
+
+主要用来定义访问权限和安全级别
+
+`GRANT（用户授权）、REVOKE（权限回收）、COMMIT（提交）、ROLLBACK（回滚）`
+
+```
+mysql> ? Account Management;
+You asked for help about help category: "Account Management"
+For more information, type 'help <item>', where <item> is one of the following
+topics:
+   ALTER RESOURCE GROUP
+   ALTER USER
+   CREATE RESOURCE GROUP
+   CREATE ROLE
+   CREATE USER
+   DROP RESOURCE GROUP
+   DROP ROLE
+   DROP USER
+   GRANT
+   RENAME USER
+   REVOKE
+   SET DEFAULT ROLE
+   SET PASSWORD
+   SET RESOURCE GROUP
+   SET ROLE
+```
+
+DML
+
+Data Manipulation Language数据操作语言
+
+主要针对数据库表内的数据进行操作
+
+`SELECT（查）、INSERT（增）、DELETE（删）、UPDATE（改）`
+
+```
+mysql> ? Data Manipulation
+You asked for help about help category: "Data Manipulation"
+For more information, type 'help <item>', where <item> is one of the following
+topics:
+   CALL
+   DELETE
+   DO
+   DUAL
+   HANDLER
+   IMPORT TABLE
+   INSERT
+   INSERT DELAYED
+   INSERT SELECT
+   JOIN
+   LOAD DATA
+   LOAD XML
+   PARENTHESIZED QUERY EXPRESSIONS
+   REPLACE
+   SELECT
+   TABLE
+   UNION
+   UPDATE
+   VALUES STATEMENT
+```
+
+DQL
+
+DQL Data Query Language 数据查询语言
+
+select -- 如何查看各种数据信息
+
+#### 客户端命令
+
+使用`show variables`命令可以查看环境变量
+
+```
+mysql> show variables like '%char%';
++--------------------------+----------------------------------+
+| Variable_name            | Value                            |
++--------------------------+----------------------------------+
+| character_set_client     | utf8mb4                          |
+| character_set_connection | utf8mb4                          |
+| character_set_database   | utf8mb4                          |
+| character_set_filesystem | binary                           |
+| character_set_results    | utf8mb4                          |
+| character_set_server     | utf8mb4                          |
+| character_set_system     | utf8mb3                          |
+| character_sets_dir       | /usr/local/mysql/share/charsets/ |
++--------------------------+----------------------------------+
+8 rows in set (0.00 sec)
+```
+
+在命令前加`?`可以查看帮助
+
+```sql
+# 查看create database命令的帮助
+mysql> ? create database;
+Name: 'CREATE DATABASE'
+Description:
+Syntax:
+CREATE {DATABASE | SCHEMA} [IF NOT EXISTS] db_name
+    [create_option] ...
+
+create_option: [DEFAULT] {
+    CHARACTER SET [=] charset_name
+  | COLLATE [=] collation_name
+  | ENCRYPTION [=] {'Y' | 'N'}
+}
+
+CREATE DATABASE creates a database with the given name. To use this
+statement, you need the CREATE privilege for the database. CREATE
+SCHEMA is a synonym for CREATE DATABASE.
+
+URL: https://dev.mysql.com/doc/refman/8.0/en/create-database.html
+
+```
+
+
+
+#### 前置知识
+
+##### 字符集
+
+查看数据库服务默认字符集信息
+
+```
+mysql> show variables like '%char%';
++--------------------------+----------------------------------+
+| Variable_name            | Value                            |
++--------------------------+----------------------------------+
+| character_set_client     | utf8mb4                          |
+| character_set_connection | utf8mb4                          |
+| character_set_database   | utf8mb4                          |
+| character_set_filesystem | binary                           |
+| character_set_results    | utf8mb4                          |
+| character_set_server     | utf8mb4                          |
+| character_set_system     | utf8mb3                          |
+| character_sets_dir       | /usr/local/mysql/share/charsets/ |
++--------------------------+----------------------------------+
+8 rows in set (0.00 sec)
+```
+
+> utf8mb3是标准utf8,使用三字节,utf8mb4使用四字节,表示的字符更多
+
+查看可以设置的字符集信息:
+
+```
+mysql> show charset;
++----------+---------------------------------+---------------------+--------+
+| Charset  | Description                     | Default collation   | Maxlen |
++----------+---------------------------------+---------------------+--------+
+| armscii8 | ARMSCII-8 Armenian              | armscii8_general_ci |      1 |
+| ascii    | US ASCII                        | ascii_general_ci    |      1 |
+| big5     | Big5 Traditional Chinese        | big5_chinese_ci     |      2 |
+| binary   | Binary pseudo charset           | binary              |      1 |
+| cp1250   | Windows Central European        | cp1250_general_ci   |      1 |
+| cp1251   | Windows Cyrillic                | cp1251_general_ci   |      1 |
+| cp1256   | Windows Arabic                  | cp1256_general_ci   |      1 |
+| cp1257   | Windows Baltic                  | cp1257_general_ci   |      1 |
+| cp850    | DOS West European               | cp850_general_ci    |      1 |
+| cp852    | DOS Central European            | cp852_general_ci    |      1 |
+| cp866    | DOS Russian                     | cp866_general_ci    |      1 |
+| cp932    | SJIS for Windows Japanese       | cp932_japanese_ci   |      2 |
+| dec8     | DEC West European               | dec8_swedish_ci     |      1 |
+| eucjpms  | UJIS for Windows Japanese       | eucjpms_japanese_ci |      3 |
+| euckr    | EUC-KR Korean                   | euckr_korean_ci     |      2 |
+| gb18030  | China National Standard GB18030 | gb18030_chinese_ci  |      4 |
+| gb2312   | GB2312 Simplified Chinese       | gb2312_chinese_ci   |      2 |
+| gbk      | GBK Simplified Chinese          | gbk_chinese_ci      |      2 |
+| geostd8  | GEOSTD8 Georgian                | geostd8_general_ci  |      1 |
+| greek    | ISO 8859-7 Greek                | greek_general_ci    |      1 |
+| hebrew   | ISO 8859-8 Hebrew               | hebrew_general_ci   |      1 |
+| hp8      | HP West European                | hp8_english_ci      |      1 |
+| keybcs2  | DOS Kamenicky Czech-Slovak      | keybcs2_general_ci  |      1 |
+| koi8r    | KOI8-R Relcom Russian           | koi8r_general_ci    |      1 |
+| koi8u    | KOI8-U Ukrainian                | koi8u_general_ci    |      1 |
+| latin1   | cp1252 West European            | latin1_swedish_ci   |      1 |
+| latin2   | ISO 8859-2 Central European     | latin2_general_ci   |      1 |
+| latin5   | ISO 8859-9 Turkish              | latin5_turkish_ci   |      1 |
+| latin7   | ISO 8859-13 Baltic              | latin7_general_ci   |      1 |
+| macce    | Mac Central European            | macce_general_ci    |      1 |
+| macroman | Mac West European               | macroman_general_ci |      1 |
+| sjis     | Shift-JIS Japanese              | sjis_japanese_ci    |      2 |
+| swe7     | 7bit Swedish                    | swe7_swedish_ci     |      1 |
+| tis620   | TIS620 Thai                     | tis620_thai_ci      |      1 |
+| ucs2     | UCS-2 Unicode                   | ucs2_general_ci     |      2 |
+| ujis     | EUC-JP Japanese                 | ujis_japanese_ci    |      3 |
+| utf16    | UTF-16 Unicode                  | utf16_general_ci    |      4 |
+| utf16le  | UTF-16LE Unicode                | utf16le_general_ci  |      4 |
+| utf32    | UTF-32 Unicode                  | utf32_general_ci    |      4 |
+| utf8     | UTF-8 Unicode                   | utf8_general_ci     |      3 |
+| utf8mb4  | UTF-8 Unicode                   | utf8mb4_0900_ai_ci  |      4 |
++----------+---------------------------------+---------------------+--------+
+41 rows in set (0.01 sec)
+```
+
+设置字符集:
+
+1. 编辑配置文件:
+   
+   ```
+   vim /etc/my.cnf
+   [mysql]
+   default-character-set=utf8
+   [mysqld]
+   character-set-server=utf8
+   ```
+
+2. 创建数据库或表时设置:
+   
+   ```
+   CREATE DATABASE 库名 CHARACTER SET charset_name(字符集名称);
+   alter DATABASE 库名 CHARACTER SET charset_name(字符集名称);
+   
+   CREATE TABLE 表名 (字段01 字段01类型 字段01约束或属性信息,字段02 字段02类型 字段02约束或属性信息) CHARACTER SET charset_name(字符集名称);
+   alter table 表名 CHARACTER SET charset_name(字符集名称);
+   ```
+
+如果已经已经发现表中有乱码信息，如何修复  
+
+1. 需要备份表中数据 （逻辑备份 mysqldump） 
+2. 清理表中数据信息
+3. 修改数据库或数据表字符集
+4. 重新导入表中数据信息 （DML insert）
+
+##### 校对规则
+
+设置校对规则(collation)的功能:
+
+- 保证表中的数据查询结果(是否区分大小写)
+
+- 保证数据在表中的排序效果
+
+查看校对规则:
+
+```sql
+# 查看数据库的校对规则
+mysql> show create database db1;
++----------+-------------------------------------------------------------------------------------------------------------------------------+
+| Database | Create Database                                                                                                               |
++----------+-------------------------------------------------------------------------------------------------------------------------------+
+| db1      | CREATE DATABASE `db1` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */ |
++----------+-------------------------------------------------------------------------------------------------------------------------------+
+1 row in set (0.00 sec)
+
+# 查看所有校对规则
+mysql> show collation;
+```
+
+设置校对规则
+
+```sql
+# 创建库时设置
+CREATE DATABASE 库名 CHARACTER SET charset_name(字符集名称) COLLATE collation_name(校对规则名称);
+# 修改校对规则
+alter DATABASE 库名 CHARACTER SET charset_name(字符集名称) COLLATE collation_name(校对规则名称);
+
+# 创建表设置
+CREATE TABLE 表名 (字段01 字段01类型 字段01约束或属性信息,字段02 字段02类型 字段02约束或属性信息) CHARACTER SET charset_name(字符集名称) COLLATE collation_name(校对规则名称);;
+# 修改表设置
+alter table 表名 CHARACTER SET charset_name(字符集名称) COLLATE collation_name(校对规则名称);
+```
 
 
