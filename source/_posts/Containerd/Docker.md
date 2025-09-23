@@ -27,7 +27,7 @@ Namespace负责资源隔离,它为容器提供了独立的系统视图,让容器
 unionfs可以把多个目录内容联合挂载到同一个目录下,而目录的物理位置是分开的
 
 > 写时复制(Copy on Write):
->
+> 
 > 其核心思想是：当多个用户或进程需要读取同一份资源时，它们共享这份资源的原始副本；只有当某个用户或进程需要修改这份资源时，系统才会真正复制一份新的副本给该修改者，修改操作只发生在这个新副本上，原始副本保持不变。
 
 当基于基础镜像构建新的镜像时,添加的每一层指令都会在当前镜像上创建一个新的,薄薄的**只读层**,底层文件不会被复制,新层只记录和下层的差异
@@ -71,8 +71,6 @@ sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin 
 ```
 sudo docker run hello-world
 ```
-
-
 
 ## 基础
 
@@ -164,7 +162,7 @@ docker exec -it mysql_db mysql -uroot -p123456 # 在容器中运行`mysql -uroot
 `docker attach [OPTIONS] CONTAINER`
 
 > `docker exec` 和 `docker attach` 命令的主要区别在于，`docker exec` 是在新进程中执行命令。它通常用于在运行的容器中启动一个交互式 shell，或在容器环境中执行任意命令。
->
+> 
 > `docker attach`命令并不会启动任何新进程。它将当前终端的标准输入和输出流附加到正在运行容器的主进程上。
 
 **查看日志**
@@ -210,10 +208,7 @@ docker commit \
 docker history debian:bookworm-slim                                                  1 ↵
 IMAGE          CREATED       CREATED BY                                      SIZE      COMMENT
 19e789b9b50f   6 weeks ago   # debian.sh --arch 'amd64' out/ 'bookworm' '…   74.8MB    debuerreotype 0.15
-
 ```
-
-
 
 ### 存储
 
@@ -362,16 +357,19 @@ Bridge 网络是 Docker 的默认网络驱动程序。当你创建一个容器�
 
 #### Bridge 网络的工作原理
 
-Bridge 网络就像是 Docker 中的一个虚拟交换机，它在宿主机上创建一个名为 docker0 的网桥，
-所有连接到这个网桥的容器都可以通过它进行通信。当你安装 Docker 时，会自动创建一个默认的 bridge 网络，
-它一般使用 172.17.0.0/16 这个网段，所有未指定网络的容器都会自动连接到这个默认网络中。
-不过，默认的 bridge 网络功能比较简单，容器之间只能通过 IP 地址互相访问，不支持通过容器名称来通信。
+Bridge（桥接）网络是 Docker 中最常用的一种**单机网络驱动**。它通过在**宿主机内核**中创建一个虚拟网桥（相当于一个虚拟交换机），将容器连接到这个网桥上，从而实现容器之间、容器与外部网络的通信。
 
-为了解决这个限制，Docker 提供了用户自定义 bridge 网络的功能。
-当你创建自己的 bridge 网络时，连接到这个网络的容器就能获得更多便利的特性：容器之间可以通过名称相互访问，
-网络隔离性更好，还可以随时将容器从网络中添加或移除。这就像是给容器们创建了一个独立的局域网，
-既安全又方便管理。比如说，你可以把一个应用的前端、后端和数据库容器都放在同一个自定义 bridge 网络中，
-它们就能通过容器名称轻松地相互通信，同时又与其他应用的容器网络保持隔离。
+除了默认的bridge网络还可以自定义bridge网络:
+
+| 特性         | 默认 Bridge 网络          | 自定义 Bridge 网络            |
+| ---------- | --------------------- | ------------------------ |
+| **名称**     | 名为 `bridge`           | 可自定义名称（如 `my-app-net`）   |
+| **容器名称发现** | **不支持**，只能通过 IP 地址通信  | **支持**，容器间可通过容器名或别名通信    |
+| **自动隔离**   | **无**，所有连接到此网络的容器默认互通 | **有**，提供与生俱来的网络隔离，更安全    |
+| **连接管理**   | 容器在运行时无法脱离，需停止后重建     | 容器可在运行中动态连接或断开网络         |
+| **适用场景**   | 临时测试、无需容器间通信的简单用例     | **生产环境最佳实践**，用于一组需要互通的容器 |
+
+#### 三、 工作原理
 
 #### 实践案例
 
@@ -428,6 +426,8 @@ docker exec -it custom-container1 curl http://custom-container2
 
 Host 网络移除了容器和 Docker 主机之间的网络隔离，直接使用主机的网络。
 
+容器中的端口直接在主机中暴露,适合对性能敏感的场景,但是安全性差
+
 **特点：**
 
 - 最佳网络性能
@@ -452,7 +452,7 @@ docker run -d \
     --name nginx-host-2 \
     --network host \
     my-nginx
-    
+
 docker logs nginx-host-2
 ```
 
@@ -490,26 +490,26 @@ Dockerfile 是一个用来构建镜像的文本文件，文本内容包含了一
 
 通过定义一系列命令和参数，Dockerfile 指导 Docker 构建一个自定义的镜像。
 
-| Dockerfile 指令 | 说明                                                         |
-| --------------- | ------------------------------------------------------------ |
-| FROM            | 指定基础镜像，用于后续的指令构建。                           |
-| MAINTAINER      | 指定Dockerfile的作者/维护者。（已弃用，推荐使用LABEL指令）   |
-| LABEL           | 添加镜像的元数据，使用键值对的形式。                         |
-| RUN             | 在构建过程中在镜像中执行命令。                               |
-| CMD             | 指定容器创建时的默认命令。（可以被覆盖）                     |
-| ENTRYPOINT      | 设置容器创建时的主要命令。（不可被覆盖）                     |
-| EXPOSE          | 声明容器运行时监听的特定网络端口。                           |
-| ENV             | 在容器内部设置环境变量。                                     |
-| ADD             | 将文件、目录或远程URL复制到镜像中。                          |
-| COPY            | 将文件或目录复制到镜像中。                                   |
-| VOLUME          | 为容器创建挂载点或声明卷。                                   |
-| WORKDIR         | 设置后续指令的工作目录。                                     |
-| USER            | 指定后续指令的用户上下文。                                   |
-| ARG             | 定义在构建过程中传递给构建器的变量，可使用 "docker build" 命令设置。 |
-| ONBUILD         | 当该镜像被用作另一个构建过程的基础时，添加触发器。           |
-| STOPSIGNAL      | 设置发送给容器以退出的系统调用信号。                         |
-| HEALTHCHECK     | 定义周期性检查容器健康状态的命令。                           |
-| SHELL           | 覆盖Docker中默认的shell，用于RUN、CMD和ENTRYPOINT指令。      |
+| Dockerfile 指令 | 说明                                         |
+| ------------- | ------------------------------------------ |
+| FROM          | 指定基础镜像，用于后续的指令构建。                          |
+| MAINTAINER    | 指定Dockerfile的作者/维护者。（已弃用，推荐使用LABEL指令）      |
+| LABEL         | 添加镜像的元数据，使用键值对的形式。                         |
+| RUN           | 在构建过程中在镜像中执行命令。                            |
+| CMD           | 指定容器创建时的默认命令。（可以被覆盖）                       |
+| ENTRYPOINT    | 设置容器创建时的主要命令。（不可被覆盖）                       |
+| EXPOSE        | 声明容器运行时监听的特定网络端口。                          |
+| ENV           | 在容器内部设置环境变量。                               |
+| ADD           | 将文件、目录或远程URL复制到镜像中。                        |
+| COPY          | 将文件或目录复制到镜像中。                              |
+| VOLUME        | 为容器创建挂载点或声明卷。                              |
+| WORKDIR       | 设置后续指令的工作目录。                               |
+| USER          | 指定后续指令的用户上下文。                              |
+| ARG           | 定义在构建过程中传递给构建器的变量，可使用 "docker build" 命令设置。 |
+| ONBUILD       | 当该镜像被用作另一个构建过程的基础时，添加触发器。                  |
+| STOPSIGNAL    | 设置发送给容器以退出的系统调用信号。                         |
+| HEALTHCHECK   | 定义周期性检查容器健康状态的命令。                          |
+| SHELL         | 覆盖Docker中默认的shell，用于RUN、CMD和ENTRYPOINT指令。  |
 
 ### COPY/ADD
 
@@ -599,18 +599,21 @@ CMD ["/etc/nginx/nginx.conf"] # 变参
 当容器启动时(docker run):
 
 - 如果用户没有在命令行中提供参数,容器将执行`ENTRYPOINT`+`CMD`
+  
   ```
   # 将执行nginx -c /etc/nginx/nginx.conf
   docker run nginx:latest
   ```
 
 - 如果用户在命令行中提供了参数,容器将执行`ENTRYPOINT`+`参数`
+  
   ```
   # 将执行nginx -c /etc/nginx/my.conf
   docker run nginx:latest -c /etc/nginx/new.conf
   ```
 
 - 如果用户想要覆盖`ENTERYPOINT`本身,必须使用`docker run`的`--entrypoint`标志
+  
   ```
   # 将执行/bin/ls -l /etc/nginx
   docker run --entrypoint /bin/ls nginx:latest -l /etc/nginx
@@ -626,6 +629,17 @@ CMD ["/etc/nginx/nginx.conf"] # 变参
 ENV <key> <value>
 ENV <key1>=<value1> <key2>=<value2>...
 ARG <参数名>[=<默认值>]
+```
+
+ARG可以不指定默认值,也根据需要在`docker build`时修改参数:
+
+```dockerfile
+# dockerfile 
+ARG BASE_IMAGE=ubuntu:20.04
+FROM ${BASE_IMAGE}
+
+# docker build
+docker build --build-arg BASE_IMAGE=ubuntu:18.04 -t myapp:test-ubuntu18 .
 ```
 
 ### VOLUME
@@ -668,7 +682,7 @@ docker build 构建镜像过程中的，每一个 RUN 命令都是新建的一�
 WORKDIR <工作目录路径>
 ```
 
-### USER 
+### USER
 
 用于指定执行后续命令的用户和用户组，这边只是切换后续命令执行的用户（用户和用户组必须提前已经存在）。
 
@@ -682,29 +696,29 @@ USER <用户名>[:<用户组>]
 
 docker-compose.yaml 文件是 Docker Compose 工具的核心配置文件，用于定义和运行多容器 Docker 应用程序。它采用 YAML 格式，易于人类阅读和编写，广泛用于开发、测试和部署多组件应用，例如 Web 服务器与数据库的组合。相比 Dockerfile，docker-compose.yaml 更专注于多容器应用的编排，而 Dockerfile 专注于单个镜像的构建。
 
-| Docker-Compose  | 描述                                                         |
-| --------------- | ------------------------------------------------------------ |
-| version         | 指定 Compose 文件格式的版本。                                |
-| services        | 定义应用程序的容器服务，每个服务可包含 image、ports 等配置。 |
-| image           | 指定服务的 Docker 镜像。                                     |
-| build           | 指定如何构建服务的镜像（通常指向 Dockerfile 目录）。         |
-| ports           | 将容器的端口映射到主机端口。                                 |
-| expose          | 将容器的端口在Docker网络内部暴露                             |
-| volumes         | 挂载卷到容器内，用于数据持久化或共享。                       |
-| environment     | 设置容器的环境变量。                                         |
-| depends_on      | 指定服务的依赖关系，控制启动顺序。                           |
-| networks        | 定义服务连接的网络。                                         |
-| volumes (顶层)  | 定义命名卷，用于数据持久化。                                 |
-| networks (顶层) | 定义命名网络，用于服务间通信。                               |
+| Docker-Compose | 描述                                   |
+| -------------- | ------------------------------------ |
+| version        | 指定 Compose 文件格式的版本。                  |
+| services       | 定义应用程序的容器服务，每个服务可包含 image、ports 等配置。 |
+| image          | 指定服务的 Docker 镜像。                     |
+| build          | 指定如何构建服务的镜像（通常指向 Dockerfile 目录）。     |
+| ports          | 将容器的端口映射到主机端口。                       |
+| expose         | 将容器的端口在Docker网络内部暴露                  |
+| volumes        | 挂载卷到容器内，用于数据持久化或共享。                  |
+| environment    | 设置容器的环境变量。                           |
+| depends_on     | 指定服务的依赖关系，控制启动顺序。                    |
+| networks       | 定义服务连接的网络。                           |
+| volumes (顶层)   | 定义命名卷，用于数据持久化。                       |
+| networks (顶层)  | 定义命名网络，用于服务间通信。                      |
 
 > ports和expose的区别:
->
+> 
 > **访问范围**：ports 允许外部访问（主机或外部网络），expose 仅限 Docker 网络内部。
->
+> 
 > **配置方式**：ports 需要指定主机和容器端口的映射，expose 只需指定容器端口。
->
+> 
 > **使用场景**：ports 用于公开服务，expose 用于私有服务通信。
->
+> 
 > **验证方式**：使用 docker ps 查看，ports 显示主机端口映射（如 0.0.0.0:8080->80/tcp），expose 仅显示容器端口（如 3306/tcp）。
 
 一个`docker-compose.yaml`示例:
@@ -884,7 +898,7 @@ Docker卷是持久化存储数据的机制,默认情况下,Docker容器的修改
 - **临时卷**：`--tmpfs`
 
 > Docker中保存数据的方法有三种:
->
+> 
 > - 默认保存在容器可写层中
 > - 挂载卷
 > - 挂载主机目录(适合大文件,大文件不适合频繁写入镜像层，否则会导致镜像膨胀)
@@ -896,31 +910,31 @@ Docker compose 通过YAML文件定义和管理多容器应用,可以一键部署
 常用指令:
 
 ```
-version: '3.8'	# 版本
-services:	# 服务
+version: '3.8'    # 版本
+services:    # 服务
   app:
-    build: ./app	# 使用dockerfile构建
-    networks:		# 绑定网络
+    build: ./app    # 使用dockerfile构建
+    networks:        # 绑定网络
       - app-network
-    expose:			# 暴露端口
+    expose:            # 暴露端口
       - 3000
-    environment:	
+    environment:    
       MYSQL_DSN: root:123456@tcp(mysql:3306)/counter
   nginx:
-    image: nginx:alpine	# 使用镜像
-    ports:				# 绑定主机端口
+    image: nginx:alpine    # 使用镜像
+    ports:                # 绑定主机端口
       - 8080:80
-    networks:	
+    networks:    
       - app-network
-    depends_on:			# 依赖关系
+    depends_on:            # 依赖关系
       - app
-    volumes:			# 挂载卷
+    volumes:            # 挂载卷
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
 
-volumes:				# 定义卷
+volumes:                # 定义卷
   mysql-data:
 
-networks:				# 定义网络
+networks:                # 定义网络
   app-network:
 ```
 
@@ -1133,7 +1147,7 @@ fn main() {
     // 获取当前时间
     let now = Local::now();
     let timestamp = now.format("%Y-%m-%d %H:%M:%S").to_string();
-    
+
     // 直接输出到 stdout
     println!("Hello from Rust!");
     println!("当前时间: {}", timestamp);
@@ -1231,11 +1245,10 @@ services:
     image: redis:latest
     expose:
       - 6379
-    
+
 # 测试:
 # docker compose up -d --build 启动服务
 # curl http://localhost:5000/ping 验证计数功能
-
 ```
 
 #### 初始化数据库
@@ -1282,9 +1295,9 @@ volumes:
 #### Spring项目使用Redis容器
 
 1. 使用`host.docker.internal`访问宿主机Redis:
-
+   
    1. 修改项目Redis 配置，将`localhost`替换为Docker内置的宿主机别名`host.docker.internal`:
-
+      
       ```java
       spring:
         data:
@@ -1292,64 +1305,62 @@ volumes:
             host: host.docker.internal
             port: 6379
       ```
-
+   
    2. 同时，需要对宿主机的redis进行配置，修改Redis配置文件(`/etc/redis/redis.conf`):
-
+      
       ```
       bind 0.0.0.0 # 允许所有IP连接
       protected-mode no # 关闭保护模式
       ```
-
+   
    3. 启动项目容器时需要添加`--add-host`参数(仅linux系统需要):
-
+      
       ```
       docker run -d --name greatming -p 8080:8080 --network greatmingweb --add-host=host.docker.internal:host-gateway greatming:1.1.0
       ```
 
-      
-
 2. 使用宿主机IP访问宿主机Redis：
-
+   
    1. 获取宿主机的Docker网关IP:
-
-      ````
+      
+      ```
       docker network inspect greatmingweb --format '{{range .IPAM.Config}}{{.Gateway}}{{end}}
-      ````
-
+      ```
+      
       结果:`172.18.0.1`.
-
+   
    2. 修改项目Redis 配置，将`localhost`替换为宿主机的Docker网关IP：
-
-      ``` java
+      
+      ```java
       spring:
         data:
           redis:
             host: 172.18.0.1
             port: 6379
       ```
-
+   
    3. 启动项目:
-
+      
       ```
       docker run -d --name greatming -p 8080:8080 --network greatmingweb greatming:1.1.0
       ```
 
 3. 使用Redis容器
-
+   
    1. 拉取redis镜像:
-
+      
       ```
       docker pull redis
       ```
-
+   
    2. 创建redis容器:
-
+      
       ```
       docker run -d --name redis --network greatmingweb redis
       ```
-
+   
    3. 修改项目Redis配置，将localhost替换为`redis`:
-
+      
       ```
       spring:
         data:
@@ -1357,9 +1368,9 @@ volumes:
             host: redis
             port: 6379
       ```
-
+   
    4. 启动项目:
-
+      
       ```
       docker run -d --name greatming -p 8080:8080 --network greatmingweb greatming:1.1.0
       ```

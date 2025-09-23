@@ -109,8 +109,25 @@ kubectl get pod
     -n 指定命名空间,默认值是default(kube-system空间存放当前组件的资源)
     --show-labels 查看当前标签
     -l 筛选资源,key=vaule
+    -L 显示所有pod,添加一列显示每个Pod的某个标签的值
     -o wide 展示详细信息,包括IP,分配的节点
+    -o yaml 打印资源清单在etcd中的存储结果
     -w 监视,打印结果的变化状态
+    
+# 显示每个pod的app标签
+[root@k8s-master01 ~]# kubectl get pod -L app
+NAME                                     READY   STATUS    RESTARTS   AGE     APP
+busybox                                  1/1     Running   0          5m19s   busybox
+myapp-clusterip-deploy-5c9cc9b64-jcf87   1/1     Running   0          52m     myapp
+myapp-clusterip-deploy-5c9cc9b64-kbljv   0/1     Running   0          52m     myapp
+myapp-clusterip-deploy-5c9cc9b64-txht6   0/1     Running   0          52m     myapp
+```
+
+`kubectl set`设置资源
+
+```
+# 设置deployment的image,触发镜像更新(滚动更新)
+kubectl set image deployment deployment-1 container=wangyanglinux/myapp:v2.0 
 ```
 
 `kubectl exec`进入容器
@@ -146,6 +163,82 @@ kubectl delete pod podname
 
 # 删除所有pod
 kubectl delete pod --all
+```
+
+`kubectl label`修改标签
+
+```
+kubectl label pod rc-demo-l2fpz version=v1
+
+# 查看pod的标签
+kubectl get pod --show-labels
+
+# 修改已经存在的标签需要添加--overwrite参数
+kubectl label pod rc-demo-thqm6 app=demo --overwrite
+```
+
+`kubectl patch`对资源对象打补丁
+
+```
+kubectl patch deployment myapp-deploy -p '{"spec":{"strategy":{"rollingUpdate":{"maxSurge":1,"maxUnavailable":0}}}}'
+```
+
+`kubectl edit`编辑etcd中存储的对象配置
+
+```
+# 这会打开默认的编辑器编辑一个资源清单
+kubectl edit deployment myapp
+
+# 如果修改后的格式存在错误,将会禁止退出编辑器,再次退出后会将错误的配置文件保存到一个yaml文件中
+[root@k8s-master01 ~]# kubectl edit deployment myapp
+error: deployments.apps "myapp" is invalid
+A copy of your changes has been stored to "/tmp/kubectl-edit-3332387646.yaml"
+error: Edit cancelled, no valid changes were saved.
+```
+
+
+
+`kubectl scale`动态调整由控制器管理的pod副本数量
+
+```
+# 修改rs的副本数量
+kubectl scale rs rc-demo --replicas=5
+
+# 查看rs类型的资源
+kubectl get rs -A
+```
+
+`kubectl autoscale`自动调整pod副本数量
+
+```
+# 当cpu负载低于80%时副本数量设定为10,当负载大于80%时提高副本数量最高达到15
+kubectl autoscale deployment deployment-1 --min=10 --max=15 --cpu-percent=80
+```
+
+`kubectl create`创建资源对象,使用`-f`基于文件的创建,但如果此文件描述的对象存在,那么不会覆盖文件
+
+```
+kubectl create -f deployment.yaml
+
+# --record参数可以查看每次revision的变化
+```
+
+`kubectl replace -f`使用新的配置完全替换掉现有资源的配置,新配置将**覆盖现有资源的所有字段和属性**,包括未指定的字段
+
+```
+kubectl replace -f deployment.yaml 
+```
+
+`kubectl apply -f`使用新的配置部分地更新现有资源的配置,它会根据提供的配置文件或参数只更新和新配置中不同的部分,**保留未指定的字段**
+
+```
+kubectl apply -f deployment.yaml 
+```
+
+`kubectl diff -f`使用指定资源清单与当前资源进行对比
+
+```
+kubectl diff -f deployment.yaml 
 ```
 
 ## 网络
@@ -902,6 +995,87 @@ FIELDS:
     template.spec.restartPolicy value is "Always".
 ```
 
+### 模板
+
+如果不知道如何编写,可以通过`kubectl create`来创建一个模板
+
+```
+# 查看帮助如何创建
+[root@k8s-master01 ~]# kubectl create deployment --help
+Examples:
+  # Create a deployment named my-dep that runs the busybox image
+  kubectl create deployment my-dep --image=busybox
+  
+  # Create a deployment with a command
+  kubectl create deployment my-dep --image=busybox -- date
+  
+  # Create a deployment named my-dep that runs the nginx image with 3 replicas
+  kubectl create deployment my-dep --image=nginx --replicas=3
+  
+  # Create a deployment named my-dep that runs the busybox image and expose port
+5701
+  kubectl create deployment my-dep --image=busybox --port=5701
+  
+# 试运行并输出为yaml格式
+[root@k8s-master01 ~]# kubectl create deployment my-dem --image=wangyanglinux/myapp:v1.0 --dry-run -o yaml
+W0921 02:25:34.774774    8617 helpers.go:704] --dry-run is deprecated and can be replaced with --dry-run=client.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    app: my-dem
+  name: my-dem
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: my-dem
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: my-dem
+    spec:
+      containers:
+      - image: wangyanglinux/myapp:v1.0
+        name: myapp
+        resources: {}
+status: {}
+
+# 直接保存为文件
+[root@k8s-master01 ~]# kubectl create deployment my-dem --image=wangyanglinux/myapp:v1.0 --dry-run -o yaml > deployment.yaml.tmp
+W0921 02:26:17.473372    9011 helpers.go:704] --dry-run is deprecated and can be replaced with --dry-run=client.
+[root@k8s-master01 ~]# cat deployment.yaml.tmp 
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    app: my-dem
+  name: my-dem
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: my-dem
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: my-dem
+    spec:
+      containers:
+      - image: wangyanglinux/myapp:v1.0
+        name: myapp
+        resources: {}
+status: {}
+```
+
+
+
 ### 示例
 
 一个pod的资源清单示例:
@@ -1458,838 +1632,1120 @@ spec:
 4. **设置资源限制**：防止资源耗尽影响节点稳定性
 5. **考虑启动性能**：合理配置 initialDelaySeconds 避免误报
 
-## 创建集群(minikube)
+## 控制器
 
-minikube能够快速搭建本地 Kubernetes 集群
+控制器通过监控集群的公共状态并致力于将当前状态转变为期望(spec)的状态,它们是Kubernetes集群内部的管理控制中心
 
-### 安装
+当控制器创建时,它只会接管**没有被其他控制器接管**并且**符合标签**的Pod
 
-```
-curl -LO https://github.com/kubernetes/minikube/releases/latest/download/minikube-linux-amd64
-sudo install minikube-linux-amd64 /usr/local/bin/minikube && rm minikube-linux-amd64
-```
+当控制器被删除时,由控制器创建的pod也会被删除
 
-安装之前还需安装容器或虚拟机管理器,如Docker、QEMU、Hyperkit、Hyper-V、KVM、Parallels、Podman、VirtualBox或VMware Fusion/Workstation
+### 标签
 
-安装docker:
+一般而言,控制器的资源清单会有三种标签:
 
-```
-# 配置docker源
-vim /etc/apt/sources.list.d/docker.list
+- `metadata.labels`: 给资源本身的标签,用于k8s管理,例如`kubectl kubectl get deploy -l app=deployment-demo`
+- `spec.selector`: 选择器,定义如何查找受自己控制的Pod
+- `spec.template.metadata.labels`: 定义创建的Pod的标签
 
-deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu   jammy stable
+selector选择的标签必须是pod设置的标签的子集,pod可以含有额外的标签,这是许多高级模式的基础:
 
-apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-```
+- 金丝雀发布:
+  - 控制器选择器:`app=myapp, version=stable`
+  - 稳定版Pod标签:`app=myapp, version=stable, env=prod`
+  - 金丝雀版Pod标签:`app=myapp, version=stable, track=canary`
 
-安装完minikube还需要安装`kubectl`
+### 声明式与命令式
 
-```
-sudo apt-get update
-# apt-transport-https 可以是一个虚拟包；如果是这样，你可以跳过这个包
-sudo apt-get install -y apt-transport-https ca-certificates curl gnupg
+- 声明式是对最终结果的描述,表明意图而不是实现它的过程,在kubernetes中,例如"应该有一个包含三个pod的ReplicaSet"
 
-# 如果 `/etc/apt/keyrings` 目录不存在，则应在 curl 命令之前创建它，请阅读下面的注释。
-# sudo mkdir -p -m 755 /etc/apt/keyrings
-curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.33/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-sudo chmod 644 /etc/apt/keyrings/kubernetes-apt-keyring.gpg # allow unprivileged APT programs to read this keyring   
+- 命令式是主动且直接的:"创建一个包含三个pod的ReplicaSet"
 
-# 这会覆盖 /etc/apt/sources.list.d/kubernetes.list 中的所有现存配置
-echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.33/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
-sudo chmod 644 /etc/apt/sources.list.d/kubernetes.list   # 有助于让诸如 command-not-found 等工具正常工作
+kubectl:
 
-# 安装kubectl
-sudo apt-get update
-sudo apt-get install -y kubectl
-```
+- `kubectl replace -f`: 使用新的配置完全替换掉现有资源的配置,新配置将**覆盖现有资源的所有字段和属性**,包括未指定的字段
 
-### 运行
+- `kubectl apply -f`: 使用新的配置部分地更新现有资源的配置,它会根据提供的配置文件或参数只更新和新配置中不同的部分,**保留未指定的字段**
 
-使用`minikube start`来创建Minikube集群
+`replace`不支持部分更新,会替换掉整个资源的配置,类似于命令式命令
 
-打开kubernetes仪表板(web服务)可以可视化创建kubernetes资源,例如Deployment和Service.
+`apply`支持部分更新,只会更新新配置中发生的部分,类似于声明式命令
+
+##### 示例
 
 ```
-# 启动一个新的终端，并保持此命令运行。
-minikube dashboard
+# deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: myapp-deploy
+  name: myapp-deploy
+spec:
+  selector:
+    matchLabels:
+      app: myapp-deploy
+  template:
+    metadata:
+      labels:
+        app: myapp-deploy
+    spec:
+      containers:
+      - image: wangyanglinux/myapp:v1.0
+        name: myapp
 ```
 
-可以使用`--url`参数来返回url而不是打开浏览器.
-
-> 在虚拟机使用中发现使用主机的浏览器无法访问返回的url,使用netsatat发现其监听的是127.0.0.1,可以通过kubectl配置使用0.0.0.0,也可以在主机运行`ssh -L 40715:127.0.0.1:40715 newuser@192.168.163.79`映射端口临时使用,在本地访问``127.0.0.1:port`
-
-### 创建对象
-
-#### Deployment
-
-Kubernetes [**Deployment**](https://kubernetes.io/zh-cn/docs/concepts/workloads/controllers/deployment/) 检查 Pod 的健康状况，并在 Pod 中的容器终止的情况下重新启动新的容器。 Deployment 是管理 Pod 创建和扩展的推荐方法。
+文件中没有指定`spec/replicas`,因此会默认创建1个pod:
 
 ```
-# 使用 kubectl create 命令创建管理 Pod 的 Deployment。该 Pod 根据提供的 Docker 镜像运行容器。
-# 此镜像为一个包含 Web 服务器的测试容器镜像
-kubectl create deployment hello-node --image=registry.k8s.io/e2e-test-images/agnhost:2.39 -- /agnhost netexec --http-port=8080
+[root@k8s-master01 ~]# kubectl create -f deployment.yaml
 
-# 查看Deployment
-kubectl get deployments
+[root@k8s-master01 ~]# kubectl get pod 
+NAME                            READY   STATUS    RESTARTS   AGE
+myapp-deploy-7977896984-9mbbx   1/1     Running   0          14s
 
-# 查看Pod
-kubectl get pods
-
-# 查看集群事件
-kubectl get events
-
-# 查看kubectl配置
-kubectl config view
-
-# 查看pod中容器的应用程序的日志
-# 首先获得pod容器名
-kubectl get pods
-NAME                         READY   STATUS    RESTARTS   AGE
-hello-node-c74958b5d-n2wqp   1/1     Running   0          22m
-# 应用程序的日志
-kubetctl logs hello-node-c74958b5d-n2wqp
+[root@k8s-master01 ~]# kubectl scale deployment myapp-deploy --replicas=5
+deployment.apps/myapp-deploy scaled
+[root@k8s-master01 ~]# kubectl get pod
+NAME                            READY   STATUS    RESTARTS   AGE
+myapp-deploy-7977896984-528rp   1/1     Running   0          4s
+myapp-deploy-7977896984-6rstx   1/1     Running   0          4s
+myapp-deploy-7977896984-9mbbx   1/1     Running   0          5m53s
+myapp-deploy-7977896984-9pxkl   1/1     Running   0          4s
+myapp-deploy-7977896984-n8r2l   1/1     Running   0          4s
 ```
 
-#### Service
-
-默认情况下,Pod只能通过Kubernetes集群中的内部IP地址访问.要使得hello-node容器可以从Kubernetes虚拟网络的外部访问,必须将Pod通过Kubernetes Service公开出来.
-
-1. 使用kubectl expose将Pod暴露给公网:
-   
-   ```
-   kubectl expose deployment hello-node --type=LoadBalancer --port=8080
-   ```
-   
-   这里的`--type=LoadBalancer`参数表明希望将Service暴露到集群外部,由于测试镜像中的应用程序代码仅监听TCP 8080端口,所以即使使用`kubectl expose`暴露其他端口也无法访问
-
-2. 查看创建的Service:
-   
-   ```
-   kubectl get services
-   ```
-   
-   对于支持负载均衡器的云服务平台而言，平台将提供一个外部 IP 来访问该服务。 在 Minikube 上，`LoadBalancer` 使得服务可以通过命令 `minikube service` 访问。
-
-3. 打开浏览器窗口:
-   
-   ```
-   minikube service hello-node
-   ```
-   
-   这将打开一个浏览器窗口，为应用程序提供服务并显示应用的响应。
-
-### 启用插件
-
-Minikube有一组内置的插件,可以在本地Kubernetes环境中启用,禁用和打开
-
-1. 列出当前支持的插件:
-   
-   ```
-   minikube addons list
-   ```
-
-2. 启用插件`metrics-server`
-   
-   ```
-   minikube addons enable metrics-server
-   ```
-
-3. 查看通过安装插件所创建的Pod和Service
-   
-   ```
-   kubectl get pod,svc -n kube-system
-   NAME                                   READY   STATUS              RESTARTS      AGE
-   pod/coredns-674b8bbfcf-4wt6s           1/1     Running             2 (30m ago)   19h
-   pod/etcd-minikube                      1/1     Running             2 (30m ago)   19h
-   pod/kube-apiserver-minikube            1/1     Running             2 (30m ago)   19h
-   pod/kube-controller-manager-minikube   1/1     Running             2 (30m ago)   19h
-   pod/kube-proxy-24zmz                   1/1     Running             2 (30m ago)   19h
-   pod/kube-scheduler-minikube            1/1     Running             2 (30m ago)   19h
-   pod/metrics-server-7fbb699795-w9fh8    0/1     ContainerCreating   0             84s
-   pod/storage-provisioner                1/1     Running             5 (30m ago)   19h
-   
-   NAME                     TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)                  AGE
-   service/kube-dns         ClusterIP   10.96.0.10      <none>        53/UDP,53/TCP,9153/TCP   19h
-   service/metrics-server   ClusterIP   10.110.62.216   <none>        443/TCP                  84s
-   ```
-
-4. 检查`metrics-server`的输出
-   
-   ```
-   kubectl top pods
-   NAME                         CPU(cores)   MEMORY(bytes)   
-   hello-node-c74958b5d-n2wqp   1m           25Mi 
-   ```
-
-5. 禁用`metrics-server`
-   
-   ```
-   minikube addons disable metrics-server
-   🌑  "The 'metrics-server' addon is disabled
-   ```
-
-### 清理
-
-清理在集群中创建的资源:
+修改资源清单文件后使用`kubectl apply`和`kubectl replace`会有不同的结果:
 
 ```
-kubectl delete service hello-node
-kubectl delete deployment hello-node
+# 修改文件,将myapp镜像版本换成2.0
+[root@k8s-master01 ~]# vim deployment.yaml
+      - image: wangyanglinux/myapp:v2.0
+# 可以看到pod数量没变,不同的版本号得到[root@k8s-master01 ~]# kubectl replace -f deployment.yaml 
+deployment.apps/myapp-deploy replaced了覆盖
+[root@k8s-master01 ~]# kubectl apply -f deployment.yaml 
+deployment.apps/myapp-deploy configured
+[root@k8s-master01 ~]# kubectl get pod -o wide
+NAME                           READY   STATUS    RESTARTS   AGE   IP              NODE         NOMINATED NODE   READINESS GATES
+myapp-deploy-58b4dc6f5-424s4   1/1     Running   0          26s   10.244.85.222   k8s-node01   <none>           <none>
+myapp-deploy-58b4dc6f5-gcxv8   1/1     Running   0          16s   10.244.58.212   k8s-node02   <none>           <none>
+myapp-deploy-58b4dc6f5-ph2nz   1/1     Running   0          26s   10.244.58.211   k8s-node02   <none>           <none>
+myapp-deploy-58b4dc6f5-wlftz   1/1     Running   0          26s   10.244.85.223   k8s-node01   <none>           <none>
+myapp-deploy-58b4dc6f5-wv8hd   1/1     Running   0          16s   10.244.85.224   k8s-node01   <none>           <none>
+[root@k8s-master01 ~]# curl 10.244.85.222
+www.xinxianghf.com | hello MyAPP | version v2.0
+
+# 修改文件,将myapp镜像版本换成3.0
+[root@k8s-master01 ~]# vim deployment.yaml
+      - image: wangyanglinux/myapp:v3.0
+# pod数量改变(资源清单中设置的数量)
+[root@k8s-master01 ~]# kubectl replace -f deployment.yaml 
+deployment.apps/myapp-deploy replaced
+[root@k8s-master01 ~]# kubectl get pod -o wide
+NAME                            READY   STATUS    RESTARTS   AGE   IP              NODE         NOMINATED NODE   READINESS GATES
+myapp-deploy-6fd574ffd6-9sr5t   1/1     Running   0          23s   10.244.58.213   k8s-node02   <none>           <none>
+[root@k8s-master01 ~]# curl 10.244.58.213
+www.xinxianghf.com | hello MyAPP | version v3.0
 ```
 
-停止Minikube集群:
+还可以在修改完文件后使用`kubectl diff`命令对比资源文件和使用中的资源差异
 
 ```
-minikube stop
+# 修改文件,将myapp镜像版本换成4.0
+[root@k8s-master01 ~]# vim deployment.yaml
+      - image: wangyanglinux/myapp:v4.0
+
+[root@k8s-master01 ~]# kubectl diff -f deployment.yaml 
+diff -u -N /tmp/LIVE-3988718542/apps.v1.Deployment.default.myapp-deploy /tmp/MERGED-2856276413/apps.v1.Deployment.default.myapp-deploy
+--- /tmp/LIVE-3988718542/apps.v1.Deployment.default.myapp-deploy        2025-09-20 02:52:55.998218608 +0800
++++ /tmp/MERGED-2856276413/apps.v1.Deployment.default.myapp-deploy      2025-09-20 02:52:56.000218631 +0800
+@@ -4,7 +4,7 @@
+   annotations:
+     deployment.kubernetes.io/revision: "3"
+   creationTimestamp: "2025-09-19T18:38:31Z"
+-  generation: 4
++  generation: 5
+   labels:
+     app: myapp-deploy
+   name: myapp-deploy
+@@ -30,7 +30,7 @@
+         app: myapp-deploy
+     spec:
+       containers:
+-      - image: wangyanglinux/myapp:v3.0
++      - image: wangyanglinux/myapp:v4.0
+         imagePullPolicy: IfNotPresent
+         name: myapp
 ```
 
-也可以删除Minikube虚拟机(VM)
+### ReplicaSet
 
-```
-minikube delete
-```
+ReplicaSet控制器负责维护集群中运行的pod数量
 
-## 创建集群(Kubeadm)
+```yaml
+# ReplicaSet
+apiVersion: apps/v1
+kind: ReplicSet
+# 如果 ReplicaSet 的标签为空，则这些标签默认为与 ReplicaSet 管理的 Pod 相同
+metadata: 
+# ReplicaSetSpec对象
+spec:
+# 系统管理
+status:
 
-与Minikube不同,kubeadm 通过执行必要的操作来启动和运行最小可用集群。按照设计，它只关注启动引导，而非配置机器。它提供了 `kubeadm init` 和 `kubeadm join` 的工具， 作为创建 Kubernetes 集群的 “快捷途径” 的最佳实践。
-
-### 安装
-
-kubeadm要求:
-
-1. 2GB内存,2核心CPU
-2. 集群中的网络彼此相互连接
-3. 节点中不能有重复的主机名,MAC地址或product_uuid
-4. 配置交换分区或禁止交换分区
-
-#### 禁止交换分区:
-
-```
-# 临时禁止
-swapoff -a
-
-# 禁止开机自动挂载交换分区
-vim /etc/fstab
-#/swap.img       none    swap    sw      0       0
+# ReplicaSetSpec
+# 必需, selector 是针对 Pod 的标签查询，应与副本计数匹配。标签的主键和取值必须匹配， 以便由这个 ReplicaSet 进行控制。它必须与 Pod 模板的标签匹配
+selector: 
+# template 是描述 Pod 的一个对象，将在检测到副本不足时创建此对象;PodTemplateSpec
+template:
+    metadata:
+    # PodSpec
+    spec:
 ```
 
-#### 确保节点唯一性
+一个典型的示例如下:
 
-```
-# 获取网络接口的MAC地址
-ip link
-
-# 对product_uuid进行校验
-sudo cat /sys/class/dmi/id/product_uuid
-```
-
-#### 检查必要的端口开放
-
-控制面板:
-
-| 协议  | 方向  | 端口范围      | 目的                      | 使用者                 |
-| --- | --- | --------- | ----------------------- | ------------------- |
-| TCP | 入站  | 6443      | Kubernetes API 服务器      | 所有                  |
-| TCP | 入站  | 2379-2380 | etcd 服务器客户端 API         | kube-apiserver、etcd |
-| TCP | 入站  | 10250     | kubelet API             | 自身、控制面              |
-| TCP | 入站  | 10259     | kube-scheduler          | 自身                  |
-| TCP | 入站  | 10257     | kube-controller-manager | 自身                  |
-
-工作节点:
-
-| 协议  | 方向  | 端口范围        | 目的                 | 使用者      |
-| --- | --- | ----------- | ------------------ | -------- |
-| TCP | 入站  | 10250       | kubelet API        | 自身、控制面   |
-| TCP | 入站  | 10256       | kube-proxy         | 自身、负载均衡器 |
-| TCP | 入站  | 30000-32767 | NodePort Services† | 所有       |
-| UDP | 入站  | 30000-32767 | NodePort Services† | 所有       |
-
-#### 安装容器运行时
-
-为了在 Pod 中运行容器，Kubernetes 使用容器运行时（Container Runtime）。
-
-默认情况下，Kubernetes 使用[容器运行时接口（Container Runtime Interface，CRI）](https://kubernetes.io/zh-cn/docs/concepts/architecture/cri) 来与你所选择的容器运行时交互。
-
-如果你不指定运行时，kubeadm 会自动尝试通过扫描已知的端点列表来检测已安装的容器运行时。
-
-如果检测到有多个或者没有容器运行时，kubeadm 将抛出一个错误并要求你指定一个想要使用的运行时。
-
-> Docker Engine 没有实现 [CRI](https://kubernetes.io/zh-cn/docs/concepts/architecture/cri/)， 而这是容器运行时在 Kubernetes 中工作所需要的。 为此，必须安装一个额外的服务 [cri-dockerd](https://github.com/Mirantis/cri-dockerd)。 cri-dockerd 是一个基于传统的内置 Docker 引擎支持的项目， 它在 1.24 版本从 kubelet 中[移除](https://kubernetes.io/zh-cn/dockershim)。
-
-安装[docker-ce](https://docs.docker.com/engine/install/ubuntu/#install-using-the-repository)(comminity edition,官方社区版)
-
-```
-# Add Docker's official GPG key:
-sudo apt-get update
-sudo apt-get install ca-certificates curl
-sudo install -m 0755 -d /etc/apt/keyrings
-sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-sudo chmod a+r /etc/apt/keyrings/docker.asc
-
-# Add the repository to Apt sources:
-echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
-  $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | \
-  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-sudo apt-get update
-sudo apt-get install docker-ce
+```yaml
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: rc-demo
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: rc-demo
+  template:
+    metadata:
+      labels:
+        app: rc-demo
+    spec:
+      containers:
+        - name: rc-demo-container
+          image: wangyanglinux/myapp:v1.0
+          env:
+          - name: GET_HOSTS_FROM
+            value: dns
+            name: zhangsan
+            value: "123"
+          ports:
+          - containerPort: 80
 ```
 
-安装[cri-dockerd](https://github.com/Mirantis/cri-dockerd/releases)
+运行后的pod:
 
 ```
-curl -O  https://github.com/Mirantis/cri-dockerd/releases/download/v0.3.17/cri-dockerd-0.3.17.amd64.tgz
-tar -xvf cri-dockerd-0.3.17.amd64.tgz 
-sudo install -o root -g root -m 0755 ./cri-dockerd/cri-dockerd /usr/bin/cri-dockerd
+[root@k8s-master01 ~]# kubectl get pod -o wide
+NAME            READY   STATUS    RESTARTS   AGE    IP              NODE         NOMINATED NODE   READINESS GATES
+rc-demo-l2fpz   1/1     Running   0          79s    10.244.58.206   k8s-node02   <none>           <none>
+rc-demo-thqm6   1/1     Running   0          106s   10.244.58.205   k8s-node02   <none>           <none>
+rc-demo-x66c5   1/1     Running   0          106s   10.244.85.216   k8s-node01   <none>           <none>
 ```
 
-还需要[配置文件](https://github.com/Mirantis/cri-dockerd/tree/master/packaging/systemd)
+如果pod被删除或损坏,kubectl会自动重新新建pod尽可能的满足期望
+
+> pod的RESTARTS和控制器的重启不在同一层级,例如pod损坏之后会根据策略自动重启,增加RESTARTS参数,而如果node损坏,那么kubectl会根据控制器自动在其他node新建pod
+
+控制器的选择器(spec/selector/matchLabels)必须是pod标签的子集,否则将创建失败(设想一下如果不是pod的子集,那么控制器会一直创建pod却无法捕获到创建的pod)
+
+可以通过`kubectl scale`命令调整控制器的副本数量
 
 ```
-# cri-docker.service
+[root@k8s-master01 ~]# kubectl get replicaset --all-namespaces
+NAMESPACE     NAME                                 DESIRED   CURRENT   READY   AGE
+default       rc-demo                              3         3         3       17m
+kube-system   calico-kube-controllers-558d465845   1         1         1       15d
+kube-system   calico-typha-5b56944f9b              1         1         1       15d
+kube-system   coredns-76f75df574                   2         2         2       16d
 
-[Unit]
-Description=CRI Interface for Docker Application Container Engine
-Documentation=https://docs.mirantis.com
-After=network-online.target firewalld.service docker.service
-Wants=network-online.target
-Requires=cri-docker.socket
+[root@k8s-master01 ~]# kubectl scale rs rc-demo --replicas=5 
+replicaset.apps/rc-demo scaled
 
-[Service]
-Type=notify
-# 此处添加了阿里云源的参数
-ExecStart=/usr/bin/cri-dockerd --container-runtime-endpoint fd:// --pod-infra-container-image=registry.aliyuncs.com/google_containers/pause:3.10
-ExecReload=/bin/kill -s HUP $MAINPID
-TimeoutSec=0
-RestartSec=2
-Restart=always
+[root@k8s-master01 ~]# kubectl get pod 
+NAME            READY   STATUS    RESTARTS   AGE
+rc-demo-9bkz6   1/1     Running   0          6s
+rc-demo-drxnq   1/1     Running   0          6s
+rc-demo-l2fpz   1/1     Running   0          18m
+rc-demo-thqm6   1/1     Running   0          18m
+rc-demo-x66c5   1/1     Running   0          18m
 
-# Note that StartLimit* options were moved from "Service" to "Unit" in systemd 229.
-# Both the old, and new location are accepted by systemd 229 and up, so using the old location
-# to make them work for either version of systemd.
-StartLimitBurst=3
-
-# Note that StartLimitInterval was renamed to StartLimitIntervalSec in systemd 230.
-# Both the old, and new name are accepted by systemd 230 and up, so using the old name to make
-# this option work for either version of systemd.
-StartLimitInterval=60s
-
-# Having non-zero Limit*s causes performance problems due to accounting overhead
-# in the kernel. We recommend using cgroups to do container-local accounting.
-LimitNOFILE=infinity
-LimitNPROC=infinity
-LimitCORE=infinity
-
-# Comment TasksMax if your systemd version does not support it.
-# Only systemd 226 and above support this option.
-TasksMax=infinity
-Delegate=yes
-KillMode=process
-
-[Install]
-WantedBy=multi-user.target
+# DESIRED期望的数量改成了5
+[root@k8s-master01 ~]# kubectl get rs -A
+NAMESPACE     NAME                                 DESIRED   CURRENT   READY   AGE
+default       rc-demo                              5         5         5       19m
+kube-system   calico-kube-controllers-558d465845   1         1         1       15d
+kube-system   calico-typha-5b56944f9b              1         1         1       15d
+kube-system   coredns-76f75df574                   2         2         2       16d
 ```
 
-```
-# cri-docker.socket
-[Unit]
-Description=CRI Docker Socket for the API
-PartOf=cri-docker.service
+#### 匹配
 
-[Socket]
-ListenStream=%t/cri-dockerd.sock
-SocketMode=0660
-SocketUser=root
-SocketGroup=docker
+`ReplicaSer`相对于旧版本的`ReplicationController`主要是支持了更强大的标签选择器
 
-[Install]
-WantedBy=sockets.target
-```
+在`spec.selector`中可以使用`matchExpressions`或`matchLabels`
 
-把它们分别放在`/etc/systemd/system/cri-docker.service`和`/etc/systemd/system/cri-docker.socket`
+`matchLabels`和旧版本的标签匹配类似,必须是pod标签的子集
 
-启动cri-docker守护进程:
+`matchExpressions`有多种选择:
+
+- `In`: label的值在某个列表中
+
+- `NotIn`: label的值不在某个列表中
+
+- `Exists`: 某个label存在
+
+- `DoesNotExist`: 某个label不存在
 
 ```
-sudo systemctl daemon-reload
-sudo systemctl enable --now cri-docker.socket
+ In
+spec:
+  selector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+        - spring-k8s
+        - hahaha
+
+# Exists
+spec:
+  selector:
+    matchExpressions:
+      - key: app
+        operator: Exists
 ```
 
-[安装kubeadm](https://kubernetes.io/zh-cn/docs/setup/production-environment/tools/kubeadm/install-kubeadm/#installing-kubeadm-kubelet-and-kubectl)
+通过`matchExpressions`可以更加灵活的进行标签选择
 
-```
-sudo apt-get update && sudo apt-get install -y apt-transport-https
-# 下载用于 Kubernetes 软件包仓库的公共签名密钥
-curl -fsSL https://mirrors.aliyun.com/kubernetes-new/core/stable/v1.33/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-# 添加 Kubernetes apt 仓库,安装其他版本需要更改url
-echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://mirrors.aliyun.com/kubernetes-new/core/stable/v1.33/deb/ /" | sudo tee /etc/apt/sources.list.d/kubernetes.list
-
-sudo apt-get update
-sudo apt-get install -y kubelet kubeadm kubectl
-# 锁定其版本
-sudo apt-mark hold kubelet kubeadm kubectl
-```
-
-> kubeadm和kubelet需要在控制面板和mode节点中安装,kubectl一般只需要在控制面板中安装
-
-### 启动集群
-
-使用`kubeadm init`命令可以初始化一个控制平面节点,它可以使用命令行参数或使用配置文件,这里我们使用配置文件配置:
-
-#### 配置
-
-使用`kubeadm config print init-defaults`[打印用于 'kubeadm init' 的默认 init 配置](https://kubernetes.io/zh-cn/docs/reference/setup-tools/kubeadm/kubeadm-config/#cmd-config-print-init-defaults)
-
-```
-sudo kubeadm config print init-defaults > kubeadm_init.yaml
-```
-
-这里我们把它保存为配置文件,运行时再次读取即可
-
-```
-# 默认的配置文件内容
-apiVersion: kubeadm.k8s.io/v1beta4
-bootstrapTokens:
-- groups:
-  - system:bootstrappers:kubeadm:default-node-token
-  token: abcdef.0123456789abcdef
-  ttl: 24h0m0s
-  usages:
-  - signing
-  - authentication
-kind: InitConfiguration
-localAPIEndpoint:
-  advertiseAddress: 1.2.3.4
-  bindPort: 6443
-nodeRegistration:
-  criSocket: unix:///var/run/containerd/containerd.sock
-  imagePullPolicy: IfNotPresent
-  imagePullSerial: true
-  name: node
-  taints: null
-timeouts:
-  controlPlaneComponentHealthCheck: 4m0s
-  discovery: 5m0s
-  etcdAPICall: 2m0s
-  kubeletHealthCheck: 4m0s
-  kubernetesAPICall: 1m0s
-  tlsBootstrap: 5m0s
-  upgradeManifests: 5m0s
----
-apiServer: {}
-apiVersion: kubeadm.k8s.io/v1beta4
-caCertificateValidityPeriod: 87600h0m0s
-certificateValidityPeriod: 8760h0m0s
-certificatesDir: /etc/kubernetes/pki
-clusterName: kubernetes
-controllerManager: {}
-dns: {}
-encryptionAlgorithm: RSA-2048
-etcd:
-  local:
-    dataDir: /var/lib/etcd
-imageRepository: registry.k8s.io
-kind: ClusterConfiguration
-kubernetesVersion: 1.33.0
-networking:
-  dnsDomain: cluster.local
-  serviceSubnet: 10.96.0.0/12
-proxy: {}
-scheduler: {}
-```
-
-需要修改一些内容:
-
-- localAPIEndpoint-advertiseAddress,API 服务器所公布的其正在监听的 IP 地址。如果未设置，则使用默认网络接口。配置为主机的IP地址即可
-- nodeRegistration-criSocket,要连接的 CRI 套接字的路径。如果为空，则 kubeadm 将尝试自动检测此值； 仅当安装了多个 CRI 或具有非标准 CRI 套接字时，才使用此选项。这里配置为`unix:///var/run/cri-dockerd.sock`
-- networking-podSubnet,配置网络插件(flannel)的地址
-- imageRepository,镜像仓库,这里配置为` registry.aliyuncs.com/google_containers `使用阿里云的镜像源
-- 添加KubeProxyConfiguration,指定模式为ipvs
-
-修改后的配置文件:
-
-```
-apiVersion: kubeadm.k8s.io/v1beta4
-bootstrapTokens:
-- groups:
-  - system:bootstrappers:kubeadm:default-node-token
-  token: abcdef.0123456789abcdef
-  ttl: 24h0m0s
-  usages:
-  - signing
-  - authentication
-kind: InitConfiguration
-localAPIEndpoint:
-  advertiseAddress: 192.168.163.79
-  bindPort: 6443
-nodeRegistration:
-  criSocket: unix:///var/run/cri-dockerd.sock
-  imagePullPolicy: IfNotPresent
-  imagePullSerial: true
-  name: node
-  taints: null
-timeouts:
-  controlPlaneComponentHealthCheck: 4m0s
-  discovery: 5m0s
-  etcdAPICall: 2m0s
-  kubeletHealthCheck: 4m0s
-  kubernetesAPICall: 1m0s
-  tlsBootstrap: 5m0s
-  upgradeManifests: 5m0s
----
-apiServer: {}
-apiVersion: kubeadm.k8s.io/v1beta4
-caCertificateValidityPeriod: 87600h0m0s
-certificateValidityPeriod: 8760h0m0s
-certificatesDir: /etc/kubernetes/pki
-clusterName: kubernetes
-controllerManager: {}
-dns: {}
-encryptionAlgorithm: RSA-2048
-etcd:
-  local:
-    dataDir: /var/lib/etcd
-imageRepository: registry.aliyuncs.com/google_containers
-kind: ClusterConfiguration
-kubernetesVersion: 1.33.0
-networking:
-  dnsDomain: cluster.local
-  serviceSubnet: 10.96.0.0/12
-  podSubnet: 10.244.0.0/16
-proxy: {}
-scheduler: {}
----
-apiVersion: kubeproxy.config.k8s.io/v1alpha1 
-kind: KubeProxyConfiguration
-mode: ipvs
-ipvs:
-  strictARP: true
-  scheduler: rr
-```
-
-#### 拉取镜像
-
-查看镜像列表
-
-```
-kubeadm config images list --config ./kubeadm_init.yaml
-
-registry.aliyuncs.com/google_containers/kube-apiserver:v1.33.0
-registry.aliyuncs.com/google_containers/kube-controller-manager:v1.33.0
-registry.aliyuncs.com/google_containers/kube-scheduler:v1.33.0
-registry.aliyuncs.com/google_containers/kube-proxy:v1.33.0
-registry.aliyuncs.com/google_containers/coredns:v1.12.0
-registry.aliyuncs.com/google_containers/pause:3.10
-registry.aliyuncs.com/google_containers/etcd:3.5.21-0
-```
-
-拉取镜像
-
-```
-sudo kubeadm config images pull --config ./kubeadm_init.yaml
-```
-
-#### 初始化控制平面
-
-```
-sudo kubeadm init --config ./kubeadm_init.yaml
-
-Your Kubernetes control-plane has initialized successfully!
-
-To start using your cluster, you need to run the following as a regular user:```
-
-  mkdir -p $HOME/.kube
-  sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
-  sudo chown $(id -u):$(id -g) $HOME/.kube/config
-
-Alternatively, if you are the root user, you can run:
-
-  export KUBECONFIG=/etc/kubernetes/admin.conf
-
-You should now deploy a pod network to the cluster.
-Run "kubectl apply -f [podnetwork].yaml" with one of the options listed at:
-  https://kubernetes.io/docs/concepts/cluster-administration/addons/
-
-Then you can join any number of worker nodes by running the following on each as root:
-
-kubeadm join 192.168.163.70:6443 --token abcdef.0123456789abcdef \
-        --discovery-token-ca-cert-hash sha256:f5ed311139d09e8bb79d729701c70ea1deea5514e45d779801c33dfc0657ad8e 
-```
-
-> 如果需要修改集群配置,可以使用
-> 
-> ```
-> # 存在多个容器进行时时必须指定
-> sudo kubeadm reset --cri-socket unix:///var/run/cri-dockerd.sock -f
-> 
-> #　清理残留文件
-> sudo rm -rf /etc/kubernetes/ /var/lib/etcd /etc/cni/net.d ~/.kube
-> sudo iptables -F && sudo iptables -t nat -F
-> 
-> # 重新初始化
-> sudo kubeadm init --config ./kubeadm_init.yaml
-> ```
-
-复制配置文件
-
-```
-mkdir -p $HOME/.kube
-sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
-sudo chown $(id -u):$(id -g) $HOME/.kube/confi
-```
-
-#### 验证IPVS模式生效
-
-首先查看所有pod获得 kube-proxy Pod的名字
-
-```
-kubectl get pods -A
-NAMESPACE     NAME                           READY   STATUS    RESTARTS        AGE
-kube-system   coredns-757cc6c8f8-hdb72       0/1     Pending   0               3h53m
-kube-system   coredns-757cc6c8f8-z257k       0/1     Pending   0               3h53m
-kube-system   etcd-node                      1/1     Running   2 (3m25s ago)   3h53m
-kube-system   kube-apiserver-node            1/1     Running   2 (3m25s ago)   3h53m
-kube-system   kube-controller-manager-node   1/1     Running   2 (3m25s ago)   3h53m
-kube-system   kube-proxy-qljrq               1/1     Running   2 (3m25s ago)   3h53m
-kube-system   kube-scheduler-node            1/1     Running   2 (3m25s ago)   3h53m
-```
-
-> 此时coredns没有工作是因为还没有安装网络插件
-
-```
-# 查看kube-proxy日志
-kubectl logs -n kube-system kube-proxy-qljrq | grep "Using ipvs Proxier"
-I0703 11:39:56.403007       1 server_linux.go:202] "Using ipvs Proxier"
-```
-
-#### 使用网络插件
-
-根据上面的提示在[插件页面](https://kubernetes.io/zh-cn/docs/concepts/cluster-administration/addons/)安装[Flannel](https://github.com/flannel-io/flannel#deploying-flannel-manually)插件
-
-```
-curl -O https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
-
-# 检查kubeadm_init.yaml中networking-podSubnet的地址与kube-flannel.yml是否相同
-kubectl apply -f kube-flannel.yml
-```
-
-查看节点状态
-
-```
-kubectl get pods -A
-```
-
-> 发现启动失败了.觉得可能是镜像下载的问题,更换镜像地址之后依旧无法启动,查看报错信息:
-> 
-> ```
-> kubectl logs -n kube-flannel kube-flannel-ds-4pzsd
-> Defaulted container "kube-flannel" out of: kube-flannel, install-cni-plugin (init), install-cni (init)
-> I0703 12:44:59.935850       1 main.go:211] CLI flags config: {etcdEndpoints:http://127.0.0.1:4001,http://127.0.0.1:2379 etcdPrefix:/coreos.com/network etcdKeyfile: etcdCertfile: etcdCAFile: etcdUsername: etcdPassword: version:false kubeSubnetMgr:true kubeApiUrl: kubeAnnotationPrefix:flannel.alpha.coreos.com kubeConfigFile: iface:[] ifaceRegex:[] ipMasq:true ifaceCanReach: subnetFile:/run/flannel/subnet.env publicIP: publicIPv6: subnetLeaseRenewMargin:60 healthzIP:0.0.0.0 healthzPort:0 iptablesResyncSeconds:5 iptablesForwardRules:true netConfPath:/etc/kube-flannel/net-conf.json setNodeNetworkUnavailable:true}
-> W0703 12:44:59.935980       1 client_config.go:659] Neither --kubeconfig nor --master was specified.  Using the inClusterConfig.  This might not work.
-> I0703 12:44:59.968091       1 kube.go:139] Waiting 10m0s for node controller to sync
-> I0703 12:44:59.968143       1 kube.go:469] Starting kube subnet manager
-> I0703 12:45:00.968686       1 kube.go:146] Node controller sync successful
-> I0703 12:45:00.968715       1 main.go:231] Created subnet manager: Kubernetes Subnet Manager - node
-> I0703 12:45:00.968722       1 main.go:234] Installing signal handlers
-> I0703 12:45:00.969055       1 main.go:479] Found network config - Backend type: vxlan
-> E0703 12:45:00.969209       1 main.go:268] Failed to check br_netfilter: stat /proc/sys/net/bridge/bridge-nf-call-iptables: no such file or directory
-> ```
-> 
-> 发现需要配置内核参数:
-> 
-> ```
-> sudo vim /etc/modules-load.d/br_netfilter.conf
-> br_netfilter
-> 
-> sudo systemctl restart systemd-modules-load.service
-> ```
-
-```
-# 成功部署后的节点状态
-NAMESPACE      NAME                           READY   STATUS    RESTARTS      AGE
-kube-flannel   kube-flannel-ds-9qx7k          1/1     Running   1 (15m ago)   24m
-kube-system    coredns-757cc6c8f8-hdb72       1/1     Running   1 (15m ago)   5h31m
-kube-system    coredns-757cc6c8f8-z257k       1/1     Running   1 (15m ago)   5h31m
-kube-system    etcd-node                      1/1     Running   3 (15m ago)   5h31m
-kube-system    kube-apiserver-node            1/1     Running   3 (15m ago)   5h31m
-kube-system    kube-controller-manager-node   1/1     Running   3 (15m ago)   5h31m
-kube-system    kube-proxy-qljrq               1/1     Running   3 (15m ago)   5h31m
-kube-system    kube-scheduler-node            1/1     Running   3 (15m ago)   5h31m
-```
-
-### 加入集群
-
-#### 生成Token
-
-```
-kubeadm token create --print-join-command
-
-kubeadm join 192.168.163.70:6443 --token 2re7wk.0u07fjm8x72s8z66 --discovery-token-ca-cert-hash sha256:00d8c4b12c3aea2c36076dba5b11232db8c218498a425b874d870270a74fb91d 
-```
-
-加入的时候需要额外指定一下`--cri-socket /var/run/cri-dockerd.sock`
-
-```
-# 在Node节点上运行
-sudo kubeadm join 192.168.163.70:6443 --cri-socket /var/run/cri-dockerd.sock --token 2re7wk.0u07fjm8x72s8z66 --discovery-token-ca-cert-hash sha256:00d8c4b12c3aea2c36076dba5b11232db8c218498a425b874d870270a74fb91d 
-```
-
-> 在节点上也可以使用`sudo kubeadm reset -f --cri-socket unix:///var/run/cri-dockerd.sock`重置kubeadm状态
-
-## 使用
+![](kubernetes/2025-09-20-02-19-08-RS.png)
 
 ### Deployment
 
-Deployment用于管理运行一个应用负载的一组Pod,通常适用于无状态的负载,一个 Deployment 为 Pod 和 ReplicaSet 提供声明式的更新能力。
+Deployment是管理无状态应用的更高层抽象,他通过管理RepliaSet来维护Pod副本数并进行更高级的功能,比如滚动更新和回滚
 
-用户只需要负责描述 Deployment 中的目标状态，而 Deployment 控制器（Controller） 以受控速率更改实际状态， 使其变为期望状态。用户可以定义 Deployment 以创建新的 ReplicaSet，或删除现有 Deployment， 并通过新的 Deployment 收养其资源。
+典型的应用场景包括:
 
-创建Deployment可以使用YAML文件或`kubectl`简单部署,这里使用YAML文件创建一个Nginx Pod
+- 定义Deployment来创建Pod和ReplicaSet
 
-首先获取NginxPod的模板:
+- 滚动升级和回滚应用
+
+- 扩容和缩容
+
+- 暂停和继续Deployment
+
+Deployment管理RS,然后由RS创建Pod
+
+#### 常用命令
+
+- `kubectl create -f deplyment.yaml --record`使用`--record`参数可以记录命令,方便的查看每次revision的变化
+
+- `kubectl scale deployment deployment-1 --replicas=5`调整副本数量
+
+- `kubectl autoscale deployment deployment-1 --min=10 --max=15 --cpu-percent=80`动态调整副本数量
+
+#### 滚动更新
+
+![Deployment.png](/home/sword/Pictures/绘图/Deployment.png)
+
+当Deployment的pod中镜像需要需要更新时,Deployment会首先新建一个ReplicaSet并指定Pod使用新版本的镜像然后逐步增加新 ReplicaSet 的副本数（例如先 +1），同时逐步减少旧 ReplicaSet 的副本数（例如先 -1）
+
+> 旧版本的PS并不会被删除,它会在回滚时使用
+
+Deployment可以保证在升级的时候只有一定数量的Pod是down,也可以确保值创建超出期望一定数量的pod,默认情况下它们的值都是25%
+
+> kubernetes1.16版本之前,即不使用apps/v1版本创建的Deployment,默认值是1
+
+可以使用`deploy.spec.strategy.type`中的`rollingUpdate`来设置(可以设置为具体数量或百分比):
+
+- `maxSurge`: 指定超出副本数
+
+- `maxUnavailable`: 最多有几个不可用
+
+#### 回滚
+
+##### rollout回滚
+
+ReplicaSet没有回滚概念,如果镜像出现bug,只能手动的修改Pod模板,而Deployment内置了版本历史记录,每次**滚动更新**都会记录一个新的"修订版本"(revision)
+
+可以使用`kubectl rollout undo`来自动将 Pod 模板**回退到上一个修订版本**，并再次执行滚动更新**,将应用稳定地恢复到更新前的状态
 
 ```
-kubectl create deploy my-app --image=nginx:latest --replicas=3 --dry-run=client -o yaml > deployment.yaml
+[root@k8s-master01 ~]# kubectl rollout undo deployment/myapp-deploy
+deployment.apps/myapp-deploy rolled back
 ```
 
-初始的模板如下:
+查看rs:
+
+```
+# 可以看到实际上是控制rs期望值来进行回滚
+kubectl get rs
+NAME                      DESIRED   CURRENT   READY   AGE
+myapp-deploy-58b4dc6f5    0         0         0       17m
+myapp-deploy-7977896984   10        10        10      37m
+```
+
+`kubectl rollout status`可以查看回滚的状态:
+
+```
+[root@k8s-master01 ~]# kubectl rollout status deployment/myapp-deploy
+finish: 9 out of 10 new replicas have been updated...
+Waiting for deployment "myapp-deploy" rollout to finish: 9 out of 10 new replicas have been updated...
+Waiting for deployment "myapp-deploy" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "myapp-deploy" rollout to finish: 1 old replicas are pending termination...
+deployment "myapp-deploy" successfully rolled out
+
+# 可以使用返回码确定是否成功回滚
+[root@k8s-master01 ~]# echo $?
+0
+```
+
+`kubectl rollout history`可以查看回滚记录
+
+```
+[root@k8s-master01 ~]# kubectl rollout history deployment/myapp-deploy
+deployment.apps/myapp-deploy 
+REVISION  CHANGE-CAUSE
+3         <none>
+4         <none>
+```
+
+可以看到`CHANGE-CAUSE`没有记录详细的滚动命令,这是因为在`kubectl create`和更新镜像`kubectl set image`的时候没有添加`--record`参数
+
+```
+# 创建
+[root@k8s-master01 ~]# kubectl create -f deployment.yaml --record
+Flag --record has been deprecated, --record will be removed in the future
+deployment.apps/myapp-deploy created
+
+# 更新
+[root@k8s-master01 ~]# kubectl set image deployment myapp-deploy myapp=wangyanglinux/myapp:v2
+.0 --record
+Flag --record has been deprecated, --record will be removed in the future
+deployment.apps/myapp-deploy image updated
+
+# 记录中有滚动命令
+[root@k8s-master01 ~]# kubectl rollout history deployment myapp-deploy
+deployment.apps/myapp-deploy 
+REVISION  CHANGE-CAUSE
+1         kubectl set image deployment myapp-deploy deployment-demo-container=wangyanglinux/myapp:v2.0 --record=true
+2         kubectl set image deployment myapp-deploy myapp=wangyanglinux/myapp:v2.0 --record=true
+
+```
+
+如果后面的命令没有添加`--record`那么将会直接抄写上一次的滚动命令
+
+```
+[root@k8s-master01 ~]# kubectl set image deployment myapp-deploy myapp=wangyanglinux/myapp:v3.0
+deployment.apps/myapp-deploy image updated
+# 3版本照抄了2的滚动命令
+[root@k8s-master01 ~]# kubectl rollout history deployment myapp-deploy
+deployment.apps/myapp-deploy 
+REVISION  CHANGE-CAUSE
+1         kubectl set image deployment myapp-deploy deployment-demo-container=wangyanglinux/myapp:v2.0 --record=true
+2         kubectl set image deployment myapp-deploy myapp=wangyanglinux/myapp:v2.0 --record=true
+3         kubectl set image deployment myapp-deploy myapp=wangyanglinux/myapp:v2.0 --record=true
+```
+
+`kubectl rollout undo --to-revision`可以回滚到指定的版本
+
+```
+# 如果不指定--to-revision,在第3版回滚会先回滚到2版,然后再次回滚到3版
+[root@k8s-master01 ~]# kubectl rollout undo deployment myapp-deploy --to-revision=1
+deployment.apps/myapp-deploy rolled back
+```
+
+`kubectl rollout pause`暂停回滚
+
+`kubectl rollout resume`继续回滚
+
+##### 文件回滚
+
+使用kubectl的回滚机制比较复杂,也可以基于文件进行回滚
+
+当需要修改时,复制一份原资源清单文件,例如格式为`filename.yaml.year.2024-01-01-10-10-name-describe`然后修改该资源清单并应用到kubernetes中
+
+##### 清理策略
+
+默认情况下不管是rollout还是文件进行回滚,rs资源清单都会保存到etcd中
+
+可以在资源清单中配置`spec.revisionHistoryLimit: 0`来让资源清单不保存到etcd中
+
+#### 金丝雀部署
+
+使用少量新版本代码进行测试
+
+```
+# 部署一个deployment
+[root@k8s-master01 ~]# kubectl create -f deployment.yaml 
+# 查看回滚策略
+[root@k8s-master01 ~]# kubectl get deployment myapp-deploy -o yaml
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 10
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: myapp-deploy
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+
+# 将回滚策略修改为,允许1个up和0个不可用
+[root@k8s-master01 ~]# kubectl patch deployment myapp-deploy -p '{"spec":{"strategy":{"rollingUpdate":{"maxSurge":1,"maxUnavailable":0}}}}'
+deployment.apps/myapp-deploy patched
+
+# 修改镜像版本为2.0 && 暂停滚动更新
+# 中括号是因为资源清单中的containers是一个数组,需要通过name属性来定位到具体的项
+# 它表示,找到containers中name为myapp的项,将其image的值修改为wangyanglinux/myapp:v2.0
+kubectl patch deployment myapp-deploy --patch '{"spec": {"template": {"spec": {"containers": [{"name": "myapp","image":"wangyanglinux/myapp:v2.0"}]}}}}' && kubectl rollout pause deploy  myapp-deploy
+
+# 金丝雀测试结束后开启滚动更新
+kubectl rollout resume deploy  myapp-deploy
+```
+
+> 当镜像版本为修改后触发滚动更新,此时只允许一个新镜像创建,创建后再删除一个旧版本的镜像,但随即停止了滚动更新,因此k8s中存在十个旧版本的pod和1个新版本的pod
+
+示例中使用了`kubectl patch`来修改镜像版本和更新策略,也可以使用`kubectl set image`或者修改资源文件后`kubectl apply -f`来修改
+
+
+
+#### 示例
 
 ```
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  creationTimestamp: null
-  labels:
-    app: my-app
-  name: my-app
+  labels:
+    app: deployment-demo
+  name: deployment-demo
 spec:
-  # Pod副本数量
-  replicas: 3
+  replicas: 5
+  selector:
+    matchLabels:
+      app: deployment-demo
+  template:
+    metadata:
+      labels:
+        app: deployment-demo
+    spec:
+      containers:
+      - image: wangyanglinux/myapp:v1.0
+        name: deployment-demo-container
+```
+
+### DaemonSet
+
+DaemonSet控制器确保全部或部分Node上运行一个Pod的副本,当有Node加入集群时也会为它们新建一个Pod,当有Node从集群中移除时,这些Pod也会被回收,删除DaemonSet会删除它创建的所有Pod
+
+典型用途:
+
+- 运行集群存储daemon,例如在每个Node上运行`glusterd`,`ceph`
+- 在每个Node上运行日志收集daemon,例如`fluentd`,`logstash`,`elk`
+- 在每个Node上运行监控daemon,例如`Prometheus Node Exporter`、`collectd`、Datadog 代理、New Relic 代理，或 Ganglia `gmond`
+
+> kubeadm创建的集群默认会对master节点添加一个污点.将不允许pod调度到此节点
+>
+> ```
+> [root@k8s-master01 ~]# kubectl describe node k8s-master01
+> 
+> Taints:             node-role.kubernetes.io/control-plane:NoSchedule
+> ```
+>
+> 可以看到污点设置为不调度
+
+案例:
+
+```yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+	name: deamonset-demo
+	labels:
+		app: daemonset-demo
+spec:
   selector:
     matchLabels:
-      app: my-app
-  strategy: {}
+    	name: deamonset-demo
   template:
     metadata:
-      creationTimestamp: null
       labels:
-        app: my-app
+      	name: deamonset-demo
+    spec:
+    	containers:
+      - name: daemonset-demo-container
+				image: wangyanglinux/myapp:v1.0
+```
+
+### Job
+
+Job控制器负责**批处理任务**,即仅执行一次的任务,它保证批处理任务的一个或多个Pod成功结束($?=0)
+
+Job的RestartPolicy仅支持Nerver或OnFailure(Alwary不可使用)
+
+单个Pod时,默认Pod成功运行后Job即结束
+
+`spec.completions`标志Job结束需要成功运行的Pod个数,默认为1,这意味着Pod成功一次之后才不会继续重启
+
+`spec.rallelism`标志并行运行的Pod个数,默认为1,并行运行的数量不会超过剩余未成功次数,例如对于需要10次成功的Job,如果并行数为4,且每次运行都成功,并行数量为`4 4 2`
+
+`spec.activeDeadlineSeconds`标志失败Pod的重试最大时间,超过这个时间不会继续重试
+
+示例:
+
+```
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-demo
+spec:
+  template:
+    metadata:
+      name: job-demo-pod
     spec:
       containers:
-      - image: nginx:latest
-        name: nginx
-        resources: {}
-status: {}
+      - name: job-demo-container
+        image: wangyanglinux/tools:maqingpythonv1
+      restartPolicy: Never
 ```
 
-启动Deployment:
+### CronJob
+
+CronJob基于时间表周期运行Job,即:
+
+- 在给定时间点只运行一次
+- 周期性在给定时间点运行
+
+> 需要kubenetes集群版本大于1.8
+
+应用场景:数据库备份,发送邮件
+
+- `.spec.schedule`：调度，必需字段，指定任务运行周期，格式同 Cron相同(`* * * * *`分 时 日 月 周)
+- `.spec.jobTemplate`：Job 模板，必需字段，指定需要运行的任务，格式同 Job
+- `.spec.startingDeadlineSeconds` ：启动 Job 的期限（秒级别），该字段是可选的。如果因为任何原因而错过了被调度的时间，那么超出期限时间的 Job 将被认为是失败的。如果没有指定，则没有期限
+- `.spec.concurrencyPolicy`：并发策略，该字段也是可选的。它指定了如何处理被 Cron Job 创建的 Job 的并发执行(前一个还未运行完时运行新的任务)。只允许指定下面策略中的一种：
+  - `Allow`（默认）：允许并发运行 Job
+  - `Forbid`：禁止并发运行，如果前一个还没有完成，则直接跳过下一个
+  - `Replace`：取消当前正在运行的 Job，用一个新的来替换
+  - 注意，当前策略只能应用于同一个 Cron Job 创建的 Job。如果存在多个 Cron Job，它们创建的 Job 之间总是允许并发运行。
+- `.spec.suspend` ：挂起，该字段也是可选的。如果设置为 `true`，后续所有执行都会被挂起。它对已经开始执行的 Job 不起作用。默认值为`false`
+- `.spec.successfulJobsHistoryLimit` 和 `.spec.failedJobsHistoryLimit` ：历史限制，是可选的字段。它们指定了可以保留多少完成和失败的 Job。默认情况下，它们分别设置为 `3` 和 `1`。设置限制的值为 `0`，相关类型的 Job 完成后将不会被保留
+
+示例:
 
 ```
-kubectl apply -f deployment.yaml 
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cronjob-demo
+spec:
+  schedule: "*/1 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: cronjob-demo-container
+            image: busybox
+            args:
+            - /bin/sh
+            - -c
+            - date; echo Hello from the kubernetes cluster
+          restartPolicy: OnFailure
 ```
 
-### Service
+## Service
 
-创建一个该Deployment的Service:
+Service定义了一个Pod的逻辑分组和一种可以访问它们的策略.这一组Pod能够被Service访问到,通常是通过`Label Selector`
+
+Service可以将Deployment创建的Pod通过负载均衡的方式给用户访问,前提是满足**标签匹配**和pod处于就绪状态
+
+如果没有Service,不同应用间的耦合比较严重,需要频繁的更新因为Pod重建导致的IP变化,通过Service可以实现Pod间的解耦
+
+![image-20250921211321533](kubernetes/image-20250921211321533.png)
+
+### 底层原理
+
+k8s中每个Node运行一个`kube-proxy`进程,它负责为`Service`实现了虚拟IP(VIP)的形式
+
+> 在k8s1.0版本中,代理使用userspace,1.1版本中新加了iptables代理,从k8s1.2版本起iptables称为默认的代理模式,在1.8版本中添加了ipvs代理
+
+#### namespace
+
+![image-20250921212449318](kubernetes/image-20250921212449318.png)
+
+在namespace模式中,kube-proxy有两个功能:
+
+1. 监听kube-apiServer,将Service变化修改本地iptables防火墙规则,实现负载均衡的分发
+2. 代理来自Server Pod的请求返回给Client Pod
+
+如果代理的请求比较多,kube-proxy可能会形成一定的压力
+
+#### Iptables
+
+![image-20250921213008523](kubernetes/image-20250921213008523.png)
+
+在Iptables模式中,kube-proxy不再参与对请求的代理,仅仅将对api-server的监听结果写入Iptables防火墙规则
+
+后端的Server Pod请求由本地防火墙转发给本地或远程的Client Pod
+
+优点: 相对于userspace模式,kube-proxy功能解耦,压力较小
+
+#### ipvs
+
+![image-20250921213303368](kubernetes/image-20250921213303368.png)
+
+相比于Iptables,仅仅是将底层的Iptables换成了ipvs
+
+ipvs的性能优于iptables,k8s中使用的是IPVS的NAT模式,当前node的IPVS规则只会被当前节点的Client Pod使用,因此压力不会太大,性能足够
+
+#### 修改
+
+首先我们可以来查看默认的service是否是iptables:
 
 ```
-kubectl create service clusterip my-service --tcp=80:8080 --dry-run=client -o yaml > service.yaml
+[root@k8s-master01 ~]# kubectl create deployment myapp --image=wangyanglinux/myapp:v1.0
+[root@k8s-master01 ~]# kubectl scale deployment myapp --replicas=10
+
+# 创建service
+[root@k8s-master01 ~]# kubectl create svc clusterip myapp --tcp=80:80
 ```
 
-默认配置如下:
+使用`ipvsadm`查看不到记录:
+
+```
+[root@k8s-master01 ~]# ipvsadm -Ln
+IP Virtual Server version 1.2.1 (size=4096)
+Prot LocalAddress:Port Scheduler Flags
+  -> RemoteAddress:Port           Forward Weight ActiveConn InActConn
+```
+
+也可以查看kube-proxy的configmap的`mode`参数:
+
+```
+[root@k8s-master01 ~]# kubectl get configmap kube-proxy -n kube-system -o yaml | grep mode
+    mode: ""
+   
+```
+
+然后修改kube-proxy configmap的mode参数:
+
+```
+# 修改configmap kube-proxy
+[root@k8s-master01 ~]# kubectl edit configmap kube-proxy -n kube-system
+
+mode: "ipvs"
+
+# 杀死旧的kube-proxy
+[root@k8s-master01 ~]# kubectl delete pod -l k8s-app=kube-proxy -n kube-system
+```
+
+新的kube-proxy重启后,就可以在`ipvsadm`中看到ipvs规则:
+
+```
+[root@k8s-master01 ~]# ipvsadm -Ln
+IP Virtual Server version 1.2.1 (size=4096)
+Prot LocalAddress:Port Scheduler Flags
+  -> RemoteAddress:Port           Forward Weight ActiveConn InActConn
+TCP  10.0.0.1:443 rr
+  -> 192.168.1.10:6443            Masq    1      0          0         
+TCP  10.0.0.10:53 rr
+  -> 10.244.32.150:53             Masq    1      0          0         
+  -> 10.244.32.151:53             Masq    1      0          0         
+TCP  10.0.0.10:9153 rr
+  -> 10.244.32.150:9153           Masq    1      0          0         
+  -> 10.244.32.151:9153           Masq    1      0          0         
+TCP  10.5.136.51:5473 rr
+  -> 192.168.1.12:5473            Masq    1      0          0         
+TCP  10.8.48.111:80 rr
+  -> 10.244.58.211:80             Masq    1      0          0         
+  -> 10.244.58.213:80             Masq    1      0          0         
+  -> 10.244.58.215:80             Masq    1      0          0         
+  -> 10.244.58.216:80             Masq    1      0          0         
+  -> 10.244.58.218:80             Masq    1      0          0         
+  -> 10.244.85.231:80             Masq    1      0          0         
+  -> 10.244.85.232:80             Masq    1      0          0         
+  -> 10.244.85.234:80             Masq    1      0          0         
+  -> 10.244.85.239:80             Masq    1      0          0         
+  -> 10.244.85.240:80             Masq    1      0          0         
+UDP  10.0.0.10:53 rr
+  -> 10.244.32.150:53             Masq    1      0          0         
+  -> 10.244.32.151:53             Masq    1      0          0  
+```
+
+可以看到其中的`TCP  10.8.48.111:80 rr`记录与svc的IP和pod的IP相符
+
+```
+[root@k8s-master01 ~]# kubectl get svc myapp
+NAME    TYPE        CLUSTER-IP    EXTERNAL-IP   PORT(S)   AGE
+myapp   ClusterIP   10.8.48.111   <none>        80/TCP    14m
+[root@k8s-master01 ~]# kubectl get pod -o wide
+NAME                     READY   STATUS    RESTARTS   AGE   IP              NODE         NOMINATED NODE   READINESS GATES
+myapp-5bc95c4658-4jwnv   1/1     Running   0          56m   10.244.58.218   k8s-node02   <none>           <none>
+myapp-5bc95c4658-8jx2k   1/1     Running   0          56m   10.244.58.215   k8s-node02   <none>           <none>
+myapp-5bc95c4658-khvbt   1/1     Running   0          56m   10.244.85.234   k8s-node01   <none>           <none>
+myapp-5bc95c4658-lg775   1/1     Running   0          56m   10.244.85.239   k8s-node01   <none>           <none>
+myapp-5bc95c4658-m9mbj   1/1     Running   0          56m   10.244.85.240   k8s-node01   <none>           <none>
+myapp-5bc95c4658-pg8kb   1/1     Running   0          56m   10.244.58.213   k8s-node02   <none>           <none>
+myapp-5bc95c4658-rz4ps   1/1     Running   0          56m   10.244.58.216   k8s-node02   <none>           <none>
+myapp-5bc95c4658-t7hdr   1/1     Running   0          56m   10.244.85.231   k8s-node01   <none>           <none>
+myapp-5bc95c4658-tw4cb   1/1     Running   0          56m   10.244.85.232   k8s-node01   <none>           <none>
+myapp-5bc95c4658-z6dm7   1/1     Running   0          56m   10.244.58.211   k8s-node02   <none>           <none>
+```
+
+当访问service的时候,请求会转发到pod的集群中
+
+### 工作模式
+
+Service有多种工作模式:
+
+- ClusterIp：默认类型，自动分配一个仅 Cluster 内部可以访问的虚拟 IP
+- NodePort：在 ClusterIP 基础上为 Service 在每台node机器上绑定一个端口，这样就可以通过 <NodeIP>: NodePort 来访问该服务
+- LoadBalancer：在 NodePort 的基础上，借助 cloud provider 创建一个外部负载均衡器，并将请求转发到<NodeIP>: NodePort
+- ExternalName：把集群外部的服务引入到集群内部来，在集群内部直接使用。没有任何类型代理被创建，这只有 kubernetes 1.7 或更高版本的 kube-dns 才支持
+
+![Service集群](kubernetes/Service集群.png)
+
+#### clusterip
+
+ClusterIP 服务是 Kubernetes 的默认服务。它提供一个集群内的服务，集群内的其它应用都可以访问该服务。集群外部无法访问它
+
+示例:
 
 ```
 apiVersion: v1
 kind: Service
 metadata:
-  creationTimestamp: null
-  labels:
-    app: my-service
-  name: my-service
+  name: myapp-clusterip
+  namespace: default
 spec:
+  type: ClusterIP
+  selector:
+    app: myapp
+    release: stabel
+    svc: clusterip
   ports:
-  - name: 80-8080
+  - name: http
     port: 80
-    protocol: TCP
-    targetPort: 8080
-  selector:
-    app: my-service
-  type: ClusterIP
-status:
-  loadBalancer: {}
+    targetPort: 80
 ```
 
-我们需要做一些修改:
+ClusterIP的接口访问策略`svc.spec.internalTrafficPolicy`有两个选项:
+
+- Cluster(默认)
+- Local
+
+在默认的Cluster中,对Service的访问会被负载均衡到每个Pod中
+
+而在Local模式下,只能被负载到Client Pod所在节点的Pod中,如果节点没有该Pod则请求会被DROP(丢弃不回复)
+
+```
+Node A 上的 Client Pod → Service → 只能转发到 Node A 上的后端 Pod
+                          ↓
+                 不会转发到 Node B 上的后端 Pod
+```
+
+
+
+#### NodePort
+
+NodePort 服务是转发外部流量到集群的服务中最原始方式。NodePort，正如这个名字所示，在集群的所有节点上开放一个特定端口，任何发送到该端口的流量都被转发到对应服务
+
+NodePort是更高级的ClusterIP,一个NodrPort Service创建时,会自动创建一个clusterIP Service并在所有节点上开放一个端口
+
+> 如果不指定，Kubernetes会从默认的端口范围（30000-32767）中随机选择一个
+
+NodePort配置的端口:
+
+- `port`是集群内部访问的网络端口
+- `nodePort`是节点的物理端口
+- `nodePort`最好不要手动指定,而是交给k8s自动设置
+
+例如对于下面的配置文件:
 
 ```
 apiVersion: v1
 kind: Service
 metadata:
-  creationTimestamp: null
-  labels:
-    app: my-app-service    # 修改名称
-  name: my-app-service
+  name: myapp-nodeport
+  namespace: default
 spec:
-  ports:
-  - name: http    # 修改名称标识,多端口时需要唯一
-    port: 80    # service暴露的端口
-    protocol: TCP
-    targetPort: 80    # 容器实际端口
-  - name: https    # 添加一个端口映射
-    protocol: TCP
-    port: 443
-    targetPort: 8443
+  type: NodePort
   selector:
-    app: my-app    # 必须与Pod标签匹配
-  type: ClusterIP
-status:
-  loadBalancer: {}
+    app: myapp
+    release: stabel
+    svc: nodeport
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
+    nodePort: 30010
 ```
 
-测试:
+配置应用后:
 
 ```
-kubectl apply --dry-run=server -f service.yaml
+[root@k8s-master01 service]# kubectl create -f nodeport.yaml 
+service/myapp-nodeport created
+[root@k8s-master01 service]# kubectl get svc
+NAME              TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)        AGE
+kubernetes        ClusterIP   10.0.0.1       <none>        443/TCP        19d
+myapp-clusterip   ClusterIP   10.0.98.47     <none>        80/TCP         145m
+myapp-nodeport    NodePort    10.11.139.80   <none>        80:31419/TCP   4s
 ```
 
-运行:
+可以使用`10,11,11139.80:80`在集群内部访问后端服务器
+
+同时在每个节点的每个可用网卡上都会开放一个31419的端口,同时编写负载集群负载到该service的后端服务器
 
 ```
-kubectl apply -f service.yaml
+# master01
+[root@k8s-master01 service]# ipvsadm -Ln
+IP Virtual Server version 1.2.1 (size=4096)
+Prot LocalAddress:Port Scheduler Flags
+  -> RemoteAddress:Port           Forward Weight ActiveConn InActConn
+# 负载的后端地址和service的相同
+TCP  172.17.0.1:31419 rr
+  -> 10.244.58.225:80             Masq    1      0          0         
+  -> 10.244.85.249:80             Masq    1      0          0         
+  -> 10.244.85.250:80             Masq    1      0          0         
+TCP  192.168.1.10:31419 rr
+  -> 10.244.58.225:80             Masq    1      0          0         
+  -> 10.244.85.249:80             Masq    1      0          0         
+  -> 10.244.85.250:80             Masq    1      0          0  
+TCP  10.11.139.80:80 rr
+  -> 10.244.58.225:80             Masq    1      0          0         
+  -> 10.244.85.249:80             Masq    1      0          0         
+  -> 10.244.85.250:80             Masq    1      0          0  
+# 两个集群对应两个可用网卡
+[root@k8s-master01 service]# ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host 
+       valid_lft forever preferred_lft forever
+2: enp0s3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+    link/ether 08:00:27:fa:a9:7a brd ff:ff:ff:ff:ff:ff
+    inet 192.168.1.10/24 brd 192.168.1.255 scope global noprefixroute enp0s3
+       valid_lft forever preferred_lft forever
+    inet6 fe80::a00:27ff:fefa:a97a/64 scope link noprefixroute 
+       valid_lft forever preferred_lft forever
+3: enp0s8: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+    link/ether 08:00:27:5d:55:cc brd ff:ff:ff:ff:ff:ff
+4: docker0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN group default 
+    link/ether 86:64:ec:76:92:0b brd ff:ff:ff:ff:ff:ff
+    inet 172.17.0.1/16 brd 172.17.255.255 scope global docker0
+       valid_lft forever preferred_lft forever
 ```
 
-在busybox中测试:
+在其他节点同样:
 
 ```
-# 运行pod并等待(循环)
-kubectl run test --image=busybox:1.36 --restart=Never -- /bin/sh -c "while true; do sleep 3600; done"
-# 进入pod容器
-kubectl exec -it test -- /bin/sh
-# 测试域名解析
-nslookup my-app-service
-Server:         10.96.0.10
-Address:        10.96.0.10:53
-# 这些是自动补全机制尝试的多个可能的后缀
-** server can't find my-app-service.cluster.local: NXDOMAIN
-
-** server can't find my-app-service.svc.cluster.local: NXDOMAIN
-
-** server can't find my-app-service.svc.cluster.local: NXDOMAIN
-
-** server can't find my-app-service.cluster.local: NXDOMAIN
-
-Name:   my-app-service.default.svc.cluster.local
-Address: 10.96.249.48
-# 测试Nginx
-wget -q -O - http://my-app-service
-<!DOCTYPE html>
-<html>
-<head>
-<title>Welcome to nginx!</title>
-
-# 删除busybox
-kubectl delete pod test
+[root@k8s-node02 ~]# ipvsadm -Ln
+IP Virtual Server version 1.2.1 (size=4096)
+Prot LocalAddress:Port Scheduler Flags
+  -> RemoteAddress:Port           Forward Weight ActiveConn InActConn
+TCP  172.17.0.1:31419 rr
+  -> 10.244.58.225:80             Masq    1      0          0         
+  -> 10.244.85.249:80             Masq    1      0          0         
+  -> 10.244.85.250:80             Masq    1      0          0         
+TCP  192.168.1.12:31419 rr
+  -> 10.244.58.225:80             Masq    1      0          0         
+  -> 10.244.85.249:80             Masq    1      0          0         
+  -> 10.244.85.250:80             Masq    1      0          0   
 ```
+
+集群外的网络就可以使用任意端口访问到集群内部:
+
+```
+╰─$ curl http://192.168.1.10:31419/hostname.html
+myapp-nodeport-deploy-685dcc6ddf-mtkmm
+
+╰─$ curl http://192.168.1.11:31419/hostname.html
+myapp-nodeport-deploy-685dcc6ddf-mtkmm
+
+╰─$ curl http://192.168.1.12:31419/hostname.html
+myapp-nodeport-deploy-685dcc6ddf-kdv74
+```
+
+
+
+
+
+#### LoadBalancer
+
+LoadBalancer是NodePort类型Service的扩展,它能够自动在云平台上创建一个外部负载均衡器,并将外部流量直接引导到Service的后端Pod上
+
+它解决了NodePort模式的两个主要问题:
+
+- **单点故障**： 用户直接访问某个Node，如果这个Node宕机，服务就不可用了。
+- **暴露节点IP**： 需要将节点的真实IP暴露给公网，存在安全和管理上的不便。
+
+LoadBalancer会对工作节点进行健康检测,如果检测失败,会自动移除该节点,由于master节点通常含有**污点**,因此不会将流量转发到Master节点.
+
+如果使用LoadBalancer,不需要手动创建一个NodePort,只需要编写一个资源清单然后运行`kubectl apply -f`,运行流程:
+
+1. k8s创建一个NodePort Service(包括创建ClusterIP和分配NodrPort端口)
+2. k8s调用集群所运行的云提供商,由Cloud Controller Manager组件完成
+3. 云服务商分配一个公网IP,创建负载均衡器实例,并将实例的后端目标组指向集群中所有工作节点的端口
+
+一个LoadBalancer的资源清单示例:
+
+```
+# 注意：这里直接定义的是 LoadBalancer
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-awesome-loadbalancer-service
+spec:
+  type: LoadBalancer # 这是最关键的一行
+  selector:
+    app: my-app # 选择需要暴露的Pod标签
+  ports:
+    - protocol: TCP
+      port: 80        # 负载均衡器自身监听的端口（也是外部访问的端口）
+      targetPort: 9376 # 后端Pod实际暴露的端口
+      # 注意：这里没有指定 `nodePort`，Kubernetes会自动分配一个（30000-32767之间）
+```
+
+#### ExternalName
+
+ExternalName不代理或负载均衡任何流量，而是充当一个 DNS 别名或 CNAME 记录，将服务名称映射到集群外部的服务
+
+`ExternalName` Service 的主要作用是在 Kubernetes 集群内部提供一个稳定的内部 DNS 名称，但这个名称实际上解析到集群外部的服务地址。
+
+主要用途:
+
+- 在应用程序中使用外部服务(例如数据库)可以使用ExternalName Service提供统一的服务名(不需要频繁修改配置)
+- 将外部服务逐步迁移到k8s集群内部时,可以使用ExternalName做过渡层,迁移后直接切换成`clusterIP`指向新的Pod
+
+### 端口
+
+Service常见有三个端口字段:
+
+- `port`: Service暴露给集群内部/外部的端口
+- `targetPort`: Service转发到Pod内部的端口
+- `nodePort`: 仅在type=NodePort时需要,暴露在Node节点上的端口
+
+### DNS解析
+
+每个Service被创建之后都会创建一条默认的DNS解析,格式为:
+
+```
+svcName.nsName.svc.domainName.
+# domainName默认是cluster.local,最后的'.'表示根域,可以不写
+# 例如一个default命名空间下的myapp-service的域名为
+clusterip.default.svc.cluster.local.
+```
+
+可以使用`dig`命令查看(需要安装bind-utils包)
+
+首先查看svc的名称:
+
+```
+[root@k8s-master01 service]# kubectl get svc
+NAME              TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+kubernetes        ClusterIP   10.0.0.1     <none>        443/TCP   19d
+myapp-clusterip   ClusterIP   10.0.98.47   <none>        80/TCP    37m
+```
+
+查看kube-cns的pod IP
+
+```
+[root@k8s-master01 service]# kubectl get pod -n kube-system -o wide | grep dns
+coredns-76f75df574-dmp2g                   1/1     Running   16 (40m ago)   19d   10.244.32.153   k8s-master01   <none>           <none>
+coredns-76f75df574-llcrd                   1/1     Running   16 (40m ago)   19d   10.244.32.152   k8s-master01   <none>           <none>
+```
+
+我们发现有两个kube-dns pod,实际上已经存在一个Service对它们做负载均衡:
+
+```
+[root@k8s-master01 service]# ipvsadm -Ln
+IP Virtual Server version 1.2.1 (size=4096)
+Prot LocalAddress:Port Scheduler Flags
+  -> RemoteAddress:Port           Forward Weight ActiveConn InActConn
+TCP  10.0.0.1:443 rr
+  -> 192.168.1.10:6443            Masq    1      2          0         
+# TCP 用于数据同步
+TCP  10.0.0.10:53 rr
+  -> 10.244.32.152:53             Masq    1      0          0         
+  -> 10.244.32.153:53             Masq    1      0          0         
+TCP  10.0.0.10:9153 rr
+  -> 10.244.32.152:9153           Masq    1      0          0         
+  -> 10.244.32.153:9153           Masq    1      0          0         
+TCP  10.0.98.47:80 rr
+  -> 10.244.58.221:80             Masq    1      0          0         
+TCP  10.5.136.51:5473 rr
+  -> 192.168.1.12:5473            Masq    1      0          0         
+# UDP 默认用作DNS解析,多次不通过也允许使用TCP解析
+UDP  10.0.0.10:53 rr
+  -> 10.244.32.152:53             Masq    1      0          0         
+  -> 10.244.32.153:53             Masq    1      0          0   
+```
+
+使用`dig`命令测试主机解析
+
+```
+[root@k8s-master01 service]# dig -t A myapp-clusterip.default.svc.cluster.local. @10.0.0.10
+
+; <<>> DiG 9.16.23-RH <<>> -t A myapp-clusterip.default.svc.cluster.local. @10.0.0.10
+;; global options: +cmd
+;; Got answer:
+;; WARNING: .local is reserved for Multicast DNS
+;; You are currently testing what happens when an mDNS query is leaked to DNS
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 37938
+;; flags: qr aa rd; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+;; WARNING: recursion requested but not available
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 4096
+; COOKIE: 0e5ef4a106841459 (echoed)
+;; QUESTION SECTION:
+;myapp-clusterip.default.svc.cluster.local. IN A
+
+# 成功解析到svc的IP
+;; ANSWER SECTION:
+myapp-clusterip.default.svc.cluster.local. 30 IN A 10.0.98.47
+
+;; Query time: 3 msec
+;; SERVER: 10.0.0.10#53(10.0.0.10)
+;; WHEN: Tue Sep 23 05:19:28 CST 2025
+;; MSG SIZE  rcvd: 139
+```
+
+测试Pod内部能否解析通过:
+
+```
+# 进入一个拥有wget或curl的容器
+[root@k8s-master01 ~]# kubectl exec -it busybox -- /bin/sh
+
+# 测试解析
+/ # wget myapp-clusterip.default.svc.cluster.local./hostname.html && cat hostname.html && rm 
+-rf hostname.html
+Connecting to myapp-clusterip.default.svc.cluster.local. (10.0.98.47:80)
+hostname.html        100% |********************************************|    39   0:00:00 ETA
+myapp-clusterip-deploy-5c9cc9b64-jcf87
+
+# 查看pod发现有这个pod
+[root@k8s-master01 ~]# kubectl get pod
+NAME                                     READY   STATUS    RESTARTS   AGE   APP=BUSYBOX
+busybox                                  1/1     Running   0          31s   
+myapp-clusterip-deploy-5c9cc9b64-jcf87   1/1     Running   0          47m   
+myapp-clusterip-deploy-5c9cc9b64-kbljv   0/1     Running   0          47m   
+myapp-clusterip-deploy-5c9cc9b64-txht6   0/1     Running   0          47m   
+```
+
+> pod中默认指定了dns服务器为kube-dns的pod,不需要像主机测试时使用dig指定dns解析服务器
+
+### 选项
+
+#### 会话保持
+
+会话保持可以让来自同一客户端IP的请求转发到同一个服务器,使用的是IPVS的持久化连接
+
+配置Service为`service.spec.sessionAffinity: ClientIP`
 
 ## 问答题
 
@@ -2463,4 +2919,14 @@ pod应该是动态管理的,手动创建pod繁琐且不方便自动化管理
     
     # 配置别名 k 的补全
     echo 'complete -o default -F __start_kubectl k' | sudo tee -a /etc/bash_completion.d/kubectl > /dev/null
+    
     ```
+
+## 其他
+
+如何修改控制器中的镜像:
+
+1. 使用`kubectl patch`打补丁
+2. 使用`kubectl set image`修改镜像
+3. 编辑资源清单文件然后`kubectl apply/replace`
+4. 使用`kubectl edit`编辑etcd中存储的配置
