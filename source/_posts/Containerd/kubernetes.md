@@ -153,7 +153,7 @@ kubectl logs pod-demo -c CName
 `kubectl describe`查看详细信息
 
 ```
-kubectl describe pod pod-demo
+kubectl describe pod -n kube-system pod-demo
 ```
 
 `kubectl delete`删除资源
@@ -2610,6 +2610,20 @@ spec:
       # 注意：这里没有指定 `nodePort`，Kubernetes会自动分配一个（30000-32767之间）
 ```
 
+##### MetalLB
+
+逻辑和私有云也可以使用MetalLB等负载均衡器
+
+MetalLB 是 Kubernetes 的**开源负载均衡器**,传统的公有云环境下，创建Loadbalancer Service之后云平台会自动分配公网IP并负责将流量转发到集群节点，而如果在裸机创建LoadBalancer Service，会一直处于Pending状态
+
+```
+$ kubectl get svc
+NAME     TYPE           CLUSTER-IP      EXTERNAL-IP   PORT(S)
+nginx    LoadBalancer   10.96.1.2       <pending>     80:30001/TCP
+```
+
+使用MetalLB可以配置固定IP地址使外部访问，MetalLb的地址池可以包含多个IP地址，允许多个Service服务暴露不同的IP地址
+
 #### ExternalName
 
 ExternalName不代理或负载均衡任何流量，而是充当一个 DNS 别名或 CNAME 记录，将服务名称映射到集群外部的服务
@@ -2746,6 +2760,141 @@ myapp-clusterip-deploy-5c9cc9b64-txht6   0/1     Running   0          47m
 会话保持可以让来自同一客户端IP的请求转发到同一个服务器,使用的是IPVS的持久化连接
 
 配置Service为`service.spec.sessionAffinity: ClientIP`
+
+## Ingress
+
+Ingress 是 Kubernetes 中管理外部访问内部服务的 **HTTP/HTTPS 路由规则** 的对象，主要用于 HTTP/HTTPS 流量的路由与负载均衡。其核心作用类似于传统网络中的“API 网关”，通过规则定义将外部请求智能分发到后端服务。
+
+主要功能
+
+1. 统一入口管理
+
+   - 提供**单一的对外访问点**，通过一个或多个固定IP/域名暴露服务
+
+   - 避免为每个HTTP服务单独创建 `LoadBalancer`，节约IP资源和成本
+
+   - 后端服务使用 `ClusterIP` 类型的Service即可
+
+
+2. 智能路由
+
+   - **基于域名路由**：`api.example.com` → API服务，`web.example.com` → 前端服务
+
+   - **基于路径路由**：`/api/*` → 后端API，`/static/*` → 静态资源服务
+
+
+3. 负载均衡
+
+   - **7层负载均衡**：支持加权轮询、最少连接、IP哈希等算法
+
+   - **会话保持**：确保用户请求持续指向同一后端实例
+
+   - **健康检查**：自动剔除不健康的服务实例
+
+
+4. TLS/SSL终止
+
+   - 在入口处处理HTTPS加解密，减轻后端服务压力
+
+   - 支持证书的动态管理和自动续期
+
+
+架构要点
+
+一个完整的Ingress包括Ingress Resource和Ingress Controller,Ingress 资源通过yaml文件定义具体的路由规则,而Ingress控制器是一个实际运行的Pod,会不断的监控Ingress资源的变化并重新配置
+
+Ingress Resource (资源定义)
+
+- Kubernetes提供的**标准API资源**
+- 定义**路由规则**（什么流量去哪里）
+- **只是声明式配置，不处理实际流量**
+
+Ingress Controller (控制器)
+
+- **第三方实现**的实际流量处理组件
+- 监控Ingress资源变化，动态更新路由配置
+- 常见实现：Ingress-NGINX, Traefik, HAProxy, Istio Gateway
+
+Kubernetes提供了Ingress的资源定义标准，但自身并未实现。需要使用第三方Ingress控制器。例如"Ingress-nginx"
+
+Ingress的工作流程:
+
+1. **部署阶段**：
+   - 管理员部署 **Ingress Controller** (Pod)
+   - 为Ingress Controller创建 **Service** (通常是LoadBalancer类型)
+   - LoadBalancer Service获得**外部IP**
+2. **配置阶段**：
+   - 用户创建 **Ingress资源** 定义路由规则
+   - Ingress Controller监控到变化并重新配置
+3. **访问阶段**：
+   - 客户端通过**DNS → 外部IP**访问
+   - 流量到达 **LoadBalancer Service**
+   - Service将流量转发到 **Ingress Controller Pod**
+   - Pod根据**Ingress规则**将请求路由到对应的**后端Service** (ClusterIP)
+   - 后端Service将流量负载均衡到**应用Pod**
+
+### 创建
+
+在创建之前先创建Deployment启动Nginx并创建一个Service代理Deployment启动的Pod
+
+```
+apiVersion: apps/v1 
+kind: Deployment 
+metadata:
+ name: nginx-deployment 
+spec:
+ replicas: 3 
+ selector:
+ matchLabels:
+ app: nginx 
+ template:
+ metadata:
+ labels:
+ app: nginx
+ spec:
+ containers:
+ - name: nginx 
+ image: nginx:1.27.3
+ ports:
+ - containerPort: 80 
+---
+apiVersion: v1 
+kind: Service 
+metadata:
+ name: nginx-service 
+spec:
+ type: ClusterIP 
+ selector:
+ app: nginx 
+ ports:
+ - protocol: TCP 
+ port: 80 
+ targetPort: 80
+```
+
+创建Ingress
+
+```
+apiVersion: networking.k8s.io/v1 
+kind: Ingress 
+metadata:
+ name: my-ingress 
+spec:
+ ingressClassName: nginx # 指定使用的Ingress控制器名称
+ rules:
+ - host: test.net.ymyw # 指定域名 
+ http:
+ paths:
+ - path: / # 根路径路由到 Service 
+ pathType: Prefix # 匹配策略，前缀匹配
+ backend:
+ service:
+ name: nginx-service # 目标 Service 名称 
+ port:
+ number: 80 # Service 端口
+```
+
+
 
 ## 问答题
 
