@@ -148,7 +148,7 @@ mkdir /data/3306/data -p
 useradd mysql -M -r -s /sbin/nologin
 
 # 修改权限信息
-chown mysql:mysql /data/3306/data -p
+chown mysql:mysql /data/3306/data -R
 ```
 
 删除可能存在的`my.cnf`文件
@@ -1462,7 +1462,151 @@ mysql     12929      1  1 18:10 ?        00:00:00 /usr/local/mysql56/bin/mysqld 
 
 ### SQL语言
 
-#### 类型
+#### 前置知识
+
+##### 字符集
+
+查看数据库服务默认字符集信息
+
+```
+mysql> show variables like '%char%';
++--------------------------+----------------------------------+
+| Variable_name            | Value                            |
++--------------------------+----------------------------------+
+| character_set_client     | utf8mb4                          |
+| character_set_connection | utf8mb4                          |
+| character_set_database   | utf8mb4                          |
+| character_set_filesystem | binary                           |
+| character_set_results    | utf8mb4                          |
+| character_set_server     | utf8mb4                          |
+| character_set_system     | utf8mb3                          |
+| character_sets_dir       | /usr/local/mysql/share/charsets/ |
++--------------------------+----------------------------------+
+8 rows in set (0.00 sec)
+```
+
+> utf8mb3是标准utf8,使用三字节,utf8mb4使用四字节,表示的字符更多
+
+查看可以设置的字符集信息:
+
+```
+mysql> show charset;
++----------+---------------------------------+---------------------+--------+
+| Charset  | Description                     | Default collation   | Maxlen |
++----------+---------------------------------+---------------------+--------+
+| armscii8 | ARMSCII-8 Armenian              | armscii8_general_ci |      1 |
+| ascii    | US ASCII                        | ascii_general_ci    |      1 |
+| big5     | Big5 Traditional Chinese        | big5_chinese_ci     |      2 |
+| binary   | Binary pseudo charset           | binary              |      1 |
+| cp1250   | Windows Central European        | cp1250_general_ci   |      1 |
+| cp1251   | Windows Cyrillic                | cp1251_general_ci   |      1 |
+| cp1256   | Windows Arabic                  | cp1256_general_ci   |      1 |
+| cp1257   | Windows Baltic                  | cp1257_general_ci   |      1 |
+| cp850    | DOS West European               | cp850_general_ci    |      1 |
+| cp852    | DOS Central European            | cp852_general_ci    |      1 |
+| cp866    | DOS Russian                     | cp866_general_ci    |      1 |
+| cp932    | SJIS for Windows Japanese       | cp932_japanese_ci   |      2 |
+| dec8     | DEC West European               | dec8_swedish_ci     |      1 |
+| eucjpms  | UJIS for Windows Japanese       | eucjpms_japanese_ci |      3 |
+| euckr    | EUC-KR Korean                   | euckr_korean_ci     |      2 |
+| gb18030  | China National Standard GB18030 | gb18030_chinese_ci  |      4 |
+| gb2312   | GB2312 Simplified Chinese       | gb2312_chinese_ci   |      2 |
+| gbk      | GBK Simplified Chinese          | gbk_chinese_ci      |      2 |
+| geostd8  | GEOSTD8 Georgian                | geostd8_general_ci  |      1 |
+| greek    | ISO 8859-7 Greek                | greek_general_ci    |      1 |
+| hebrew   | ISO 8859-8 Hebrew               | hebrew_general_ci   |      1 |
+| hp8      | HP West European                | hp8_english_ci      |      1 |
+| keybcs2  | DOS Kamenicky Czech-Slovak      | keybcs2_general_ci  |      1 |
+| koi8r    | KOI8-R Relcom Russian           | koi8r_general_ci    |      1 |
+| koi8u    | KOI8-U Ukrainian                | koi8u_general_ci    |      1 |
+| latin1   | cp1252 West European            | latin1_swedish_ci   |      1 |
+| latin2   | ISO 8859-2 Central European     | latin2_general_ci   |      1 |
+| latin5   | ISO 8859-9 Turkish              | latin5_turkish_ci   |      1 |
+| latin7   | ISO 8859-13 Baltic              | latin7_general_ci   |      1 |
+| macce    | Mac Central European            | macce_general_ci    |      1 |
+| macroman | Mac West European               | macroman_general_ci |      1 |
+| sjis     | Shift-JIS Japanese              | sjis_japanese_ci    |      2 |
+| swe7     | 7bit Swedish                    | swe7_swedish_ci     |      1 |
+| tis620   | TIS620 Thai                     | tis620_thai_ci      |      1 |
+| ucs2     | UCS-2 Unicode                   | ucs2_general_ci     |      2 |
+| ujis     | EUC-JP Japanese                 | ujis_japanese_ci    |      3 |
+| utf16    | UTF-16 Unicode                  | utf16_general_ci    |      4 |
+| utf16le  | UTF-16LE Unicode                | utf16le_general_ci  |      4 |
+| utf32    | UTF-32 Unicode                  | utf32_general_ci    |      4 |
+| utf8     | UTF-8 Unicode                   | utf8_general_ci     |      3 |
+| utf8mb4  | UTF-8 Unicode                   | utf8mb4_0900_ai_ci  |      4 |
++----------+---------------------------------+---------------------+--------+
+41 rows in set (0.01 sec)
+```
+
+设置字符集:
+
+1. 编辑配置文件:
+
+   ```
+   vim /etc/my.cnf
+   [mysql]
+   default-character-set=utf8
+   [mysqld]
+   character-set-server=utf8
+   ```
+
+2. 创建数据库或表时设置:
+
+   ```
+   CREATE DATABASE 库名 CHARACTER SET charset_name(字符集名称);
+   alter DATABASE 库名 CHARACTER SET charset_name(字符集名称);
+   
+   CREATE TABLE 表名 (字段01 字段01类型 字段01约束或属性信息,字段02 字段02类型 字段02约束或属性信息) CHARACTER SET charset_name(字符集名称);
+   alter table 表名 CHARACTER SET charset_name(字符集名称);
+   ```
+
+如果已经已经发现表中有乱码信息，如何修复  
+
+1. 需要备份表中数据 （逻辑备份 mysqldump） 
+2. 清理表中数据信息
+3. 修改数据库或数据表字符集
+4. 重新导入表中数据信息 （DML insert）
+
+##### 校对规则
+
+设置校对规则(collation)的功能:
+
+- 保证表中的数据查询结果(是否区分大小写)
+
+- 保证数据在表中的排序效果
+
+查看校对规则:
+
+```sql
+# 查看数据库的校对规则
+mysql> show create database db1;
++----------+-------------------------------------------------------------------------------------------------------------------------------+
+| Database | Create Database                                                                                                               |
++----------+-------------------------------------------------------------------------------------------------------------------------------+
+| db1      | CREATE DATABASE `db1` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */ |
++----------+-------------------------------------------------------------------------------------------------------------------------------+
+1 row in set (0.00 sec)
+
+# 查看所有校对规则
+mysql> show collation;
+```
+
+设置校对规则
+
+```sql
+# 创建库时设置
+CREATE DATABASE 库名 CHARACTER SET charset_name(字符集名称) COLLATE collation_name(校对规则名称);
+# 修改校对规则
+alter DATABASE 库名 CHARACTER SET charset_name(字符集名称) COLLATE collation_name(校对规则名称);
+
+# 创建表设置
+CREATE TABLE 表名 (字段01 字段01类型 字段01约束或属性信息,字段02 字段02类型 字段02约束或属性信息) CHARACTER SET charset_name(字符集名称) COLLATE collation_name(校对规则名称);;
+# 修改表设置
+alter table 表名 CHARACTER SET charset_name(字符集名称) COLLATE collation_name(校对规则名称);
+```
+
+##### 类型
 
 根据SQL语言操作方式细化为四种类型
 
@@ -1590,7 +1734,7 @@ DQL Data Query Language 数据查询语言
 
 select -- 如何查看各种数据信息
 
-#### 客户端命令
+##### 客户端命令
 
 使用`show variables`命令可以查看环境变量
 
@@ -1636,150 +1780,689 @@ URL: https://dev.mysql.com/doc/refman/8.0/en/create-database.html
 
 ```
 
+#### 表结构
 
-
-#### 前置知识
-
-##### 字符集
-
-查看数据库服务默认字符集信息
+##### 创建表语法:
 
 ```
-mysql> show variables like '%char%';
-+--------------------------+----------------------------------+
-| Variable_name            | Value                            |
-+--------------------------+----------------------------------+
-| character_set_client     | utf8mb4                          |
-| character_set_connection | utf8mb4                          |
-| character_set_database   | utf8mb4                          |
-| character_set_filesystem | binary                           |
-| character_set_results    | utf8mb4                          |
-| character_set_server     | utf8mb4                          |
-| character_set_system     | utf8mb3                          |
-| character_sets_dir       | /usr/local/mysql/share/charsets/ |
-+--------------------------+----------------------------------+
-8 rows in set (0.00 sec)
+CREATE TABLE 表名 (字段01 字段01类型 字段01约束或属性信息,字段02 字段02类型 字段02约束或属性信息) CHARACTER SET charset_name(字符集名称) COLLATE collation_name(校对规则名称);;
 ```
 
-> utf8mb3是标准utf8,使用三字节,utf8mb4使用四字节,表示的字符更多
+##### 数据类型
 
-查看可以设置的字符集信息:
+整数类型:
+
+- tinyint  1字节
+- smallint  2字节
+- mediumint  3字节
+- int  4字节
+- bigint  8字节
+
+小数类型:
+
+- float(m,d)  单精度浮点型 8位精度(4字节)
+- double(m,d)  双精度浮点型  16位精度(8字节)
+
+字符类型:
+
+- char(n)  定长字符类型,最多255字符
+- varchar(n)  可变字符类型,最多65535字符
+- tinytext  可变字符类型,最多255字符
+- text  可变字符类型,最多65535
+- mediumtext 可变字符类型,最多2^24-1
+- longtext  可变字符类型,最多2^32-1
+
+时间类型:
+
+- date 记录年月日
+- time 记录时分秒
+- datetime 记录年月日时分秒
+- timestamp 记录时间戳
+
+特殊类型:
+
+- Enum 枚举类型 `create table t1 (gender enum('man','woman'));`
+
+##### 字段约束
+
+- primary key 主键约束,非空且唯一,一张表只能有一个主键
+- foreign key 外键约束,多表管理使用
+- unique key 唯一约束
+- not null 非空约束
+
+#### 查询
+
+>  可以从[该页面](http://dev.mysql.com/doc/index-other.html)下载测试数据
+
+##### 单表查询
+
+基础的查询方式是:select + from + where
+
+`````sql
+mysql> select * from city where name='Kabul';
++----+-------+-------------+----------+------------+
+| ID | Name  | CountryCode | District | Population |
++----+-------+-------------+----------+------------+
+|  1 | Kabul | AFG         | Kabol    |    1780000 |
++----+-------+-------------+----------+------------+
+`````
+
+where的几种用法:
+
+- 等值条件: `select * from city where name='Kabul';`
+
+- 区间条件: `select * from city where ID<100;`
+
+  - 常用的条件符号: `< > <= >= !=和<>`
+  - 也可以用`BETWEEN AND`: `select * from city where ID BETWEEN 100 AND 150;`(左闭右闭区间)
+
+- 在列表中:使用`IN`操作符: `select * from city where ID IN (1,3,5);`
+
+- 模糊匹配: 使用`LIKE`操作符:  `SELECT * FROM city WHERE name LIKE 'New%';`
+
+  - `%`匹配零个到任意个字符: `SELECT * FROM city WHERE name LIKE '%City';`
+  - `_`匹配单个字符:`SELECT * FROM city WHERE name LIKE 'San _';`
+
+- `AND`和`OR`逻辑操作符:
+
+  - `SELECT * FROM city WHERE Population > 1000000 AND CountryCode = 'USA';`
+  - `SELECT * FROM city WHERE CountryCode = 'USA' OR CountryCode = 'CHN';`
+  - `AND`的优先级优先于`OR`
+
+- `空值判断`: `IS NULL`和`IS NOT NULL`:
+
+  - `SELECT * FROM city WHERE District IS NULL;`
+  - `SELECT * FROM city WHERE District IS NOT NULL;`
+
+- 子查询: 对于同样的"查询有超过100万人口城市的国家"的任务:
+
+  - `IN`:
+
+    ```sql
+    SELECT Name FROM country 
+    WHERE Code IN (
+      SELECT CountryCode FROM city 
+      WHERE Population > 5000000
+    );
+    ```
+
+  - `EXISTS`:
+
+    ```sql
+    SELECT Name from country co
+    WHERE EXISTS(
+      SELECT 1 FROM city ci
+      WHERE ci.CountryCode = co.Code
+      	AND ci.Population > 5000000
+    );
+    ```
+
+  - `EXISTS`对外层每一行执行一次,而`IN`先执行子查询得到结果集再进行匹配,当子结果集很大时,`EXISTS`通常性能更好
+
+### 事务
+
+事务是一组操作的集合,这些操作要么全部成功执行,要么全部不执行,事务的主要目的是确保数据库的完整性和一致性,特别是处理多个操作时,事务通常用于保证数据一致性场景,例如银行转账,订单处理等,每个事务都会认为自己是独占数据库的.
+
+事务的四个特性:
+
+- 原子性: 事务的所有操作要么全部成功,要么全部失败,即使在执行过程中发生错误,系统也会确保事务的状态不会部分完成
+- 一致性: 事务执行前后,数据库的状态必须保持一致
+- 隔离性: 事务的执行不应该受其他事务的影响
+- 持久性,一旦事务提交,其结果是永久性的,即使系统崩溃,已提交的事务所做的更改也应该被保留
+
+命令:
+
+1. `BEGIN/START TRANSACTION`开启一个事务
+2. `COMMIT`提交事务,持久化所有修改
+3. `ROLLBACK`回滚事务,撤销所有未提交的修改
+
+意外情况:
+
+1. 脏读: 一个事务读取了另一个事务尚未提交的数据(数据可能会被回滚)
+2. 不可重复读: 在一个事务中多次读取同一行数据时,结果可能不同
+3. 幻读: 在一个事务中,多次读取同一范围的数据结果可能不同,例如读取余额大于100的账户时,其他事务插入了新的账户
+
+事务隔离级别
+
+事务隔离级别用于控制一个事务可以看到其他事务所做的更改的程度。不同的隔离级别提供了不同程度的并发性和一致性保证。\
+
+- `READ UNCOMMITTED`最低的隔离级别，允许一个事务读取其他事务尚未提交的数据（即“脏读”）
+- `READ COMMITTED`事务只能读取其他事务已经提交的数据。不会发生脏读,但可能发生不可重复读
+- `REPEATABLE READ`默认隔离级别,同一个事务多次读取同一数据时,结果相同.但可能发生"幻读"
+- `SERIALIZABLE`最高隔离级别,事务被完全隔离,好像是在串行执
+
+隔离级别严格可以提高数据一致性,但是可能会导致下列问题:
+
+1. 性能下降
+2. 死锁(Deadlock)
+3. 复杂事物管理
+4. 延迟和响应时间增加
+
+死锁是一种并发执行环境中可能发生的资源竞争问题,当两个或多个事务相互等待对方持有的资源而资源又无法释放时,就会发生死锁.
+
+死锁发生必须同时满足的条件:
+
+1. 互斥,资源同一时间只能被一个事务占用
+2. 请求与保持,一个事务已经持有了资源但又请求其他事务持有的资源
+3. 不可剥夺,资源只能主动释放,不能强制剥夺
+4. 循环等待,每个事务都在等待下一个事务持有的资源
+
+预防死锁:
+
+- 通过资源分级与资源分配排序打破循环条件
+- 打破请求与保持,要求事务在一开始请求所有需要的资源
+- 允许系统强制剥夺某些资源
+- 定期检查系统是否存在死锁,检测到后系统回滚其中一个事务释放其持有的资源
+
+设立隔离级别
 
 ```
-mysql> show charset;
-+----------+---------------------------------+---------------------+--------+
-| Charset  | Description                     | Default collation   | Maxlen |
-+----------+---------------------------------+---------------------+--------+
-| armscii8 | ARMSCII-8 Armenian              | armscii8_general_ci |      1 |
-| ascii    | US ASCII                        | ascii_general_ci    |      1 |
-| big5     | Big5 Traditional Chinese        | big5_chinese_ci     |      2 |
-| binary   | Binary pseudo charset           | binary              |      1 |
-| cp1250   | Windows Central European        | cp1250_general_ci   |      1 |
-| cp1251   | Windows Cyrillic                | cp1251_general_ci   |      1 |
-| cp1256   | Windows Arabic                  | cp1256_general_ci   |      1 |
-| cp1257   | Windows Baltic                  | cp1257_general_ci   |      1 |
-| cp850    | DOS West European               | cp850_general_ci    |      1 |
-| cp852    | DOS Central European            | cp852_general_ci    |      1 |
-| cp866    | DOS Russian                     | cp866_general_ci    |      1 |
-| cp932    | SJIS for Windows Japanese       | cp932_japanese_ci   |      2 |
-| dec8     | DEC West European               | dec8_swedish_ci     |      1 |
-| eucjpms  | UJIS for Windows Japanese       | eucjpms_japanese_ci |      3 |
-| euckr    | EUC-KR Korean                   | euckr_korean_ci     |      2 |
-| gb18030  | China National Standard GB18030 | gb18030_chinese_ci  |      4 |
-| gb2312   | GB2312 Simplified Chinese       | gb2312_chinese_ci   |      2 |
-| gbk      | GBK Simplified Chinese          | gbk_chinese_ci      |      2 |
-| geostd8  | GEOSTD8 Georgian                | geostd8_general_ci  |      1 |
-| greek    | ISO 8859-7 Greek                | greek_general_ci    |      1 |
-| hebrew   | ISO 8859-8 Hebrew               | hebrew_general_ci   |      1 |
-| hp8      | HP West European                | hp8_english_ci      |      1 |
-| keybcs2  | DOS Kamenicky Czech-Slovak      | keybcs2_general_ci  |      1 |
-| koi8r    | KOI8-R Relcom Russian           | koi8r_general_ci    |      1 |
-| koi8u    | KOI8-U Ukrainian                | koi8u_general_ci    |      1 |
-| latin1   | cp1252 West European            | latin1_swedish_ci   |      1 |
-| latin2   | ISO 8859-2 Central European     | latin2_general_ci   |      1 |
-| latin5   | ISO 8859-9 Turkish              | latin5_turkish_ci   |      1 |
-| latin7   | ISO 8859-13 Baltic              | latin7_general_ci   |      1 |
-| macce    | Mac Central European            | macce_general_ci    |      1 |
-| macroman | Mac West European               | macroman_general_ci |      1 |
-| sjis     | Shift-JIS Japanese              | sjis_japanese_ci    |      2 |
-| swe7     | 7bit Swedish                    | swe7_swedish_ci     |      1 |
-| tis620   | TIS620 Thai                     | tis620_thai_ci      |      1 |
-| ucs2     | UCS-2 Unicode                   | ucs2_general_ci     |      2 |
-| ujis     | EUC-JP Japanese                 | ujis_japanese_ci    |      3 |
-| utf16    | UTF-16 Unicode                  | utf16_general_ci    |      4 |
-| utf16le  | UTF-16LE Unicode                | utf16le_general_ci  |      4 |
-| utf32    | UTF-32 Unicode                  | utf32_general_ci    |      4 |
-| utf8     | UTF-8 Unicode                   | utf8_general_ci     |      3 |
-| utf8mb4  | UTF-8 Unicode                   | utf8mb4_0900_ai_ci  |      4 |
-+----------+---------------------------------+---------------------+--------+
-41 rows in set (0.01 sec)
+SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE;
 ```
 
-设置字符集:
+### 锁
 
-1. 编辑配置文件:
-   
-   ```
-   vim /etc/my.cnf
-   [mysql]
-   default-character-set=utf8
-   [mysqld]
-   character-set-server=utf8
-   ```
+在MySQL中，锁（Lock）是数据库管理系统中用于控制并发访问的一种机制，用于保证数据的一致性和完整性。锁可以防止多个事务同时对同一数据进行修改，从而避免数据冲突和错误。MySQL支持多种锁机制，主要分为表锁（Table Lock）和行锁（Row Lock），具体实现取决于所使用的存储引擎。
 
-2. 创建数据库或表时设置:
-   
-   ```
-   CREATE DATABASE 库名 CHARACTER SET charset_name(字符集名称);
-   alter DATABASE 库名 CHARACTER SET charset_name(字符集名称);
-   
-   CREATE TABLE 表名 (字段01 字段01类型 字段01约束或属性信息,字段02 字段02类型 字段02约束或属性信息) CHARACTER SET charset_name(字符集名称);
-   alter table 表名 CHARACTER SET charset_name(字符集名称);
-   ```
+#### 表锁与行锁
 
-如果已经已经发现表中有乱码信息，如何修复  
+表锁是对整个表进行锁定,锁定期间其他事务无法对该表进行操作,表锁的粒度较大,锁定范围广,但开销较小,适合对表进行批量操作的场景
 
-1. 需要备份表中数据 （逻辑备份 mysqldump） 
-2. 清理表中数据信息
-3. 修改数据库或数据表字符集
-4. 重新导入表中数据信息 （DML insert）
+行锁是对表中的单行或多行数据进行锁定,锁定范围小,粒度细,适合高并发场景.可以显著提高数据库的并发性能,但实现复杂,开销较大
 
-##### 校对规则
+#### 共享锁与排它锁
 
-设置校对规则(collation)的功能:
+共享锁: 允许事务读取被锁定的表/行,但不允许修改
 
-- 保证表中的数据查询结果(是否区分大小写)
+排他锁: 事务独占被锁定的行,禁止其他事务读取或修改
 
-- 保证数据在表中的排序效果
+意向锁: 意向锁用于表示事务对表中某些行的锁定意图
 
-查看校对规则:
+- 意向共享锁(IS): 表示事务意图对某些行加共享锁
+- 意向排它锁(IX): 表示事务意图对某些行加排它锁
 
-```sql
-# 查看数据库的校对规则
-mysql> show create database db1;
-+----------+-------------------------------------------------------------------------------------------------------------------------------+
-| Database | Create Database                                                                                                               |
-+----------+-------------------------------------------------------------------------------------------------------------------------------+
-| db1      | CREATE DATABASE `db1` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */ |
-+----------+-------------------------------------------------------------------------------------------------------------------------------+
+#### 乐观锁与悲观锁
+
+乐观锁: 假设数据大多数情况下不会发生冲突,只在提交时检查是否违反了并发规则
+
+悲观锁: 假设数据冲突比较高,因此在事务开始时就对数据加锁,直到事务完成才释放锁
+
+#### 间隙锁和临键锁
+
+间隙锁用于锁定索引记录之间的“间隙”，防止其他事务插入新记录。间隙锁是`InnoDB`实现**可重复读**（Repeatable Read）隔离级别的关键机制。
+
+临键锁是行锁和间隙锁的组合，用于锁定索引记录及其前后的间隙。它用于**防止幻读**（Phantom Read），是`InnoDB`在可重复读隔离级别下的默认锁机制。
+
+#### 锁管理
+
+查看当前锁的信息:
+
+```
+SHOW ENGINE INNODB STATUS;
+```
+
+### 主从复制
+
+#### 主从复制的原理
+
+1. 主库(Master/Source)中做出数据变更(被记录为事件)
+2. 事件和GTID(全局事件标识)写入到主库所在的机器中的binlog中
+3. 主库通过Binlog Dump Thread进程发送binlog到从库
+4. 从库通过IO进程连接主库并传输binlog事件写入到本地的relaylog(中继日志)中
+5. 从库调用SQL线程尝试运行relaylog中的事件
+
+##### Relay Log的作用:
+
+- 临时存储从主库接收的binlog事件
+- 允许SQL线程按顺序执行
+- 提供故障恢复的能力
+
+##### GTID
+
+GTID是全局事务标识,格式为`server_uuid:transaction_id`
+
+包括服务器唯一标识和事务序号,例如
+
+```
+08e55d12-a743-11f0-b405-080027527017:1
+```
+
+##### 复制状态
+
+```
+# 线程运行状态
+Replica_IO_Running: Yes           -- IO线程正常运行
+Replica_SQL_Running: Yes          -- SQL线程正常运行
+# 二进制日志位置
+Source_Log_File: binlog.000003           -- 当前读取的主库binlog文件
+Read_Source_Log_Pos: 1024                -- 已读取到的主库binlog位置
+Exec_Source_Log_Pos: 1024                -- 已执行到的主库binlog位置
+# relaylog
+Relay_Source_Log_File: binlog.000003     -- 当前relay log对应的主库binlog文件
+# 复制信息
+Seconds_Behind_Source: 0                  -- 复制延迟为0秒
+# GTID复制机制
+Auto_Position: 1                          -- 启用GTID自动定位
+Source_UUID: 08e55d12-a743-11f0-b405-080027527017  -- 主库唯一标识
+Retrieved_Gtid_Set: 08e55d12-a743-11f0-b405-080027527017:1-2  -- 已接收的GTID
+Executed_Gtid_Set: 08e55d12-a743-11f0-b405-080027527017:1-2   -- 已执行的GTID
+# 连接和配置信息
+Source_Host: 192.168.1.53                 -- 主库地址
+Source_User: repl                         -- 复制用户
+Source_Port: 3306                         -- 主库端口
+Connect_Retry: 60                         -- 连接重试间隔(秒)
+Source_Server_Id: 2                       -- 主库server_id
+Source_Info_File: mysql.slave_master_info -- 连接信息存储文件
+```
+
+#### GTID
+
+主从复制有两种方式:`GTID`和`binlog`
+
+- **GTID** 提供了一种全局、唯一的事务标识方法，简化了MySQL的复制和故障恢复过程。也是基于binlog实现的。
+- **binlog** 是基于文件位置的方法，可能在多级或复杂的复制场景中带来更多的配置和管理复杂性。
+
+在现代MYSQL部署中,使用GTID称为首选方法,它提供了更简单、更可靠的复制和故障恢复功能
+
+在主节点上编辑`/etc/my.cnf`
+
+```
+# 添加主从辅助有关的配置
+[mysqld]
+server-id=1                       # 唯一标识主服务器
+log-bin=mysql-bin                # 开启二进制日志，指定日志文件前缀
+gtid_mode=ON                      # 开启GTID模式
+enforce_gtid_consistency=ON       # 强制GTID一致性
+log-slave-updates=1              # 记录从属服务器的更新到二进制日志
+log-bin-index=mysql-bin.index    # 指定二进制日志索引文件
+```
+
+然后创建一个用于用户同步的账户,该账号需要`REPLICATION SLAVE,REPLICATION CLIENT`权限
+
+```
+CREATE USER 'repl'@'%' IDENTIFIED WITH mysql_native_password BY 'Ymyw@123';
+GRANT REPLICATION SLAVE,REPLICATION CLIENT ON *.* TO 'repl'@'%';
+```
+
+用同步账户登录mysql查看binlog的文件名和Position
+
+```
+mysql> SHOW MASTER STATUS;
++------------------+----------+--------------+------------------+------------------------------------------+
+| File             | Position | Binlog_Do_DB | Binlog_Ignore_DB | Executed_Gtid_Set                        |
++------------------+----------+--------------+------------------+------------------------------------------+
+| mysql-bin.000002 |      709 |              |                  | 4db829b1-a740-11f0-b334-080027952038:1-2 |
++------------------+----------+--------------+------------------+------------------------------------------+
+1 row in set (0.00 sec)
+```
+
+根据上面的配置在从节点上进行配置:
+
+```
+vim /etc/my.cnf
+[mysqld]
+# 可以排除某些库的同步
+# replicate-ignore-db=xxx
+server-id=2                       # 唯一标识从服务器，必须与主服务器不同
+read-only=ON                    # 配置存库为只读
+relay-log=mysql-relay-bin        # 指定中继日志文件的前缀
+gtid_mode=ON                      # 开启GTID模式
+enforce_gtid_consistency=ON       # 强制GTID一致性
+log-slave-updates=1              # 记录从属服务器的更新到二进制日志（可选，如果需要在复制链中继续传递）
+```
+
+在mysql执行配置
+
+```
+CHANGE REPLICATION SOURCE TO
+    SOURCE_HOST='192.168.1.52',
+    SOURCE_PORT=3306,
+    SOURCE_USER='repl',
+    SOURCE_PASSWORD='Ymyw@123',
+    SOURCE_LOG_FILE='mysql-bin.000003',
+    SOURCE_LOG_POS=721;
+```
+
+启动复制并查看同步状态:
+
+```
+mysql> START REPLICA;
+mysql> SHOW REPLICA STATUS\G;
+```
+
+![image-20251013021929288](DataBase/image-20251013021929288.png)
+
+#### Binlog
+
+通过将主库的写操作记录到二进制日志(Binlog),从库定期从主库获取这些日志并应用到本地,从而使从库的数据和主库保持一致
+
+默认采用异步复制方式,即从库无需持续连接主库,可以在网络可用时同步数据.从库可以复制主库的全部数据库,特定数据库或特定表,灵活性较高
+
+首先需要确保从库服务器(Slave)可以远程访问到主库服务器(Master).
+
+主库配置
+
+```
+sudo vim /etc/mysql/mysql.conf.d/mysqld.cnf
+
+# id值,在主从中唯一
+server-id               = 1
+# 开启binlog
+log_bin                 = /var/log/mysql/mysql-bin.log
+```
+
+重启后测试:
+
+```
+sudo systemctl restart mysql
+
+# 进入mysql中查看,log_bin已开
+mysql> show variables like '%log_bin%';
++---------------------------------+--------------------------------+
+| Variable_name                   | Value                          |
++---------------------------------+--------------------------------+
+| log_bin                         | ON                             |
+| log_bin_basename                | /var/log/mysql/mysql-bin       |
+| log_bin_index                   | /var/log/mysql/mysql-bin.index |
+| log_bin_trust_function_creators | OFF                            |
+| log_bin_use_v1_row_events       | OFF                            |
+| sql_log_bin                     | ON                             |
++---------------------------------+--------------------------------+
+6 rows in set (0.01 sec)
+
+# 查看master状态,slave中需要File和Position的值
+mysql> SHOW MASTER STATUS;
++------------------+----------+--------------+------------------+-------------------+
+| File             | Position | Binlog_Do_DB | Binlog_Ignore_DB | Executed_Gtid_Set |
++------------------+----------+--------------+------------------+-------------------+
+| mysql-bin.000104 |      157 |              |                  |                   |
++------------------+----------+--------------+------------------+-------------------+
+1 row in set (0.00 sec)
+```
+
+创建一个用户用于同步
+
+```
+mysql> CREATE USER 'backup'@'%' IDENTIFIED BY '123456';
+# 授予 backup 用户所有权限
+GRANT ALL PRIVILEGES ON *.* TO 'backup'@'%';
+```
+
+从库配置
+
+编辑配置文件:
+
+```
+sudo vim /etc/mysql/mysql.conf.d/mysqld.cnf
+
+server-id               = 2
+
+# 用于固定Master配置
+master_info_repository = TABLE
+relay_log_info_repository = TABLE
+```
+
+```
+sudo systemctl restart mysql
+
+mysql > CHANGE MASTER TO
+MASTER_HOST='192.168.163.99',
+MASTER_PORT=3306,
+MASTER_USER='backup',
+MASTER_PASSWORD='123456',
+MASTER_LOG_FILE='mysql-bin.000104',
+get_master_public_key=1,
+MASTER_LOG_POS=157;     
+
+# 检查状态:
+show slave status\G
+```
+
+出现下面的内容即成功:
+
+```
+mysql> SHOW SLAVE STATUS\G
+*************************** 1. row ***************************
+               Slave_IO_State: Waiting for source to send event
+                  Master_Host: 192.168.163.99
+                  Master_User: backup
+                  Master_Port: 3306
+                Connect_Retry: 60
+              Master_Log_File: mysql-bin.000104
+          Read_Master_Log_Pos: 157
+               Relay_Log_File: mysqlSlave1-relay-bin.000002
+                Relay_Log_Pos: 326
+        Relay_Master_Log_File: mysql-bin.000104
+             Slave_IO_Running: Yes
+            Slave_SQL_Running: Yes
+```
+
+#### 测试
+
+在主库中新建数据库,表,并插入数据:
+
+```
+CREATE DATABASE test_sync;
+USE test_sync;
+CREATE TABLE demo (id INT);
+INSERT INTO demo VALUES (1);
+```
+
+在从库中能够看到:
+
+```
+mysql> SHOW DATABASES; 
++--------------------+
+| Database           |
++--------------------+
+| information_schema |
+| mysql              |
+| performance_schema |
+| sqltest            |
+| sys                |
+| test               |
+| test_sync          |
++--------------------+
+7 rows in set (0.00 sec)
+
+mysql> SELECT * FROM test_sync.demo;
++------+
+| id   |
++------+
+|    1 |
++------+
 1 row in set (0.00 sec)
 
-# 查看所有校对规则
-mysql> show collation;
 ```
 
-设置校对规则
+#### 修改配置
 
-```sql
-# 创建库时设置
-CREATE DATABASE 库名 CHARACTER SET charset_name(字符集名称) COLLATE collation_name(校对规则名称);
-# 修改校对规则
-alter DATABASE 库名 CHARACTER SET charset_name(字符集名称) COLLATE collation_name(校对规则名称);
+可以使用`STOP REPLICA;`停止同步
 
-# 创建表设置
-CREATE TABLE 表名 (字段01 字段01类型 字段01约束或属性信息,字段02 字段02类型 字段02约束或属性信息) CHARACTER SET charset_name(字符集名称) COLLATE collation_name(校对规则名称);;
-# 修改表设置
-alter table 表名 CHARACTER SET charset_name(字符集名称) COLLATE collation_name(校对规则名称);
+如果需要修改从库配置:
+
 ```
+mysql> STOP SLAVE;
+mysql> RESET SLAVE;
+mysql> CHANGE MASTER TO
+MASTER_HOST='192.168.163.99',
+MASTER_PORT=3306,
+...
+MASTER_LOG_FILE='mysql-bin.000104',
+MASTER_LOG_POS=157;   
+mysql> START SLAVE;
+```
+
+#### 排错
+
+IP地址被封禁导致无法连接:
+
+```
+Last_IO_Error: Error connecting to source 'backup@192.168.163.99:3306'. This was attempt 266/86400, with a delay of 60 seconds between attempts. Message: Host '192.168.163.100' is blocked because of many connection errors; unblock with 'mysqladmin flush-hosts'
+```
+
+错误尝试太多,从库的IP已经被封禁了,此时可以在主库刷新列表:
+
+```
+mysql> FLUSH HOSTS;
+```
+
+然后重新尝试连接
+
+```
+# 从库
+mysql> STOP SLAVE;
+mysql> START SLAVE;
+mysql> SHOW SLAVE STATUS\G;
+```
+
+UUID重复:
+
+```
+Last_IO_Error: Fatal error: The replica I/O thread stops because source and replica have equal MySQL server UUIDs; these UUIDs must be different for replication to work.
+```
+
+主库和从库的MYSQL实例2使用了相同的UUID,当从库是通过复制主库的数据目录创建时(例如虚拟机克隆),会出现此问题
+
+```
+# 从库查看
+mysql> SHOW VARIABLES LIKE 'server_uuid';
++---------------+--------------------------------------+
+| Variable_name | Value                                |
++---------------+--------------------------------------+
+| server_uuid   | 995a5906-5a4a-11f0-a909-080027e43cb0 |
++---------------+--------------------------------------+
+1 row in set (0.01 sec)
+# 主库查看
+mysql> SHOW VARIABLES LIKE 'server_uuid';
++---------------+--------------------------------------+
+| Variable_name | Value                                |
++---------------+--------------------------------------+
+| server_uuid   | 995a5906-5a4a-11f0-a909-080027e43cb0 |
++---------------+--------------------------------------+
+1 row in set (0.01 sec)
+```
+
+```
+# 首先在从库中找到配置文件
+newuser@mysqlSlave1:~$ sudo find /var/lib/mysql | grep auto.cnf
+/var/lib/mysql/auto.cnf
+
+# 打开这个文件可以看到记录的是uuid
+newuser@mysqlSlave1:~$ sudo cat /var/lib/mysql/auto.cnf
+[auto]
+server-uuid=995a5906-5a4a-11f0-a909-080027e43cb0
+
+# 把它删掉然后重新启动mysql服务即可
+sudo rm -r /var/lib/mysql/auto.cnf
+sudo systemctl start mysql
+```
+
+验证插件错误:
+
+```
+mysql> SHOW SLAVE STATUS\G;
+Slave_SQL_Running_State: error connecting to master 'slave@192.168.0.104:3306' - retry-time: 60 retries: 6 message:
+Authentication plugin 'caching_sha2_password' reported error: 
+Authentication requires secure connection.
+```
+
+在从库设置时添加参数`get_master_public_key=1`:
+
+```
+mysql> CHANGE MASTER TO
+MASTER_HOST='192.168.163.99',
+MASTER_PORT=3306,
+...
+MASTER_LOG_FILE='mysql-bin.000104',
+get_master_public_key=1,
+MASTER_LOG_POS=157;   
+```
+
+#### 主从切换
+
+##### 手动切换
+
+首先停止主库的写操作:
+```
+SET GLOBAL read_only = ON;
+```
+
+从库停止复制并提升为主库
+
+```
+STOP REPLICA;
+RESET REPLICA ALL;
+# 关闭只读
+SET GLOBAL read_only = OFF;
+SET GLOBAL super_read_only = OFF;
+```
+
+在主库上:
+
+```
+# 配置复制
+CHANGE REPLICATION SOURCE TO
+SOURCE_HOST='192.168.1.53',
+SOURCE_USER='repl',
+SOURCE_PASSWORD='Ymyw@123',
+SOURCE_PORT=3306,
+SOURCE_AUTO_POSITION=1;
+# 启动复制
+START REPLICA;
+# 查看复制状态
+SHOW REPLICA STATUS\G;
+```
+
+###### 故障修复
+
+我在从库停止复制之后,又创建了`repl`用户,此事件被主库复制之后尝试运行失败,因为主库已经有了`repl`用户
+
+```
+mysql> SHOW REPLICA STATUS\G;
+*************************** 1. row ***************************
+             Replica_IO_State: Waiting for source to send event
+                  Source_Host: 192.168.1.53
+                  Source_User: repl
+                  Source_Port: 3306
+                Connect_Retry: 60
+              Source_Log_File: binlog.000003
+          Read_Source_Log_Pos: 1024
+               Relay_Log_File: centos9-relay-bin.000003
+                Relay_Log_Pos: 367
+        Relay_Source_Log_File: binlog.000003
+           Replica_IO_Running: Yes
+          Replica_SQL_Running: No
+                   Last_Errno: 1396
+                   Last_Error: Coordinator stopped because there were error(s) in the worker(s). The most recent failure being: Worker 1 failed executing transaction '08e55d12-a743-11f0-b405-080027527017:1' at source log binlog.000003, end_log_pos 480. See error log and/or performance_schema.replication_applier_status_by_worker table for more details about this failure or others, if any.
+```
+
+跳过该事件即可:
+
+```
+mysql> STOP REPLICA;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> SET GTID_NEXT = '08e55d12-a743-11f0-b405-080027527017:1';
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> BEGIN; COMMIT;
+Query OK, 0 rows affected (0.00 sec)
+
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> SET GTID_NEXT = 'AUTOMATIC';
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> START REPLICA;
+Query OK, 0 rows affected (0.04 sec)
+
+mysql> SHOW REPLICA STATUS\G;
+           Replica_IO_Running: Yes
+          Replica_SQL_Running: Yes
+```
+
+
+
 
 

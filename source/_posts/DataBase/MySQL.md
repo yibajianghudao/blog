@@ -18,8 +18,6 @@ sudo mysql
 ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'password';
 ```
 
-
-
 ## 远程访问
 
 访问远程服务器的数据库可以使用

@@ -296,3 +296,9 @@ spec:
 ```
 
 添加域名搜索域即可
+
+## 建议
+
+MySQL换成postgresql
+
+加一个lvs
